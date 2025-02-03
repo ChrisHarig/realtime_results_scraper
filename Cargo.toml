@@ -1,0 +1,6 @@
+[package]
+name = "Realtime_Results_Scraper"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]

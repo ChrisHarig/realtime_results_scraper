@@ -1,1 +1,7 @@
 /target
+
+# Ignore example Meet Results
+/Results_2024
+
+# Ignore html files
+*.html

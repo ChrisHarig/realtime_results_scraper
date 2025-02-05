@@ -3,8 +3,8 @@ use scraper::{Html, Selector};
 use reqwest;
 use tokio;
 use std::collections::HashMap;
-//mod page_handler;
-//use page_handler::{process_event_page, print_results};
+mod page_handler;
+use page_handler::{process_event_page, print_results};
 
 // -----------------------------------------------------------------------------------------
 // Processes the index page, stores each event pair, and makes calls to process each event
@@ -24,9 +24,10 @@ async fn fetch_html(url: &str) -> Result<String, Box<dyn std::error::Error>> {
     Ok(response.text().await?)
 }
 
+// Parses the event from the link, returns the event name, type and SwimEvent struct
 fn parse_event_from_link(href: &str, event_text: &str) -> Option<(String, char, SwimEvent)> {
     // Check if it's a valid event link
-    if !href.ends_with(".htm") || !href.contains("24032") {
+    if !href.ends_with(".htm") {
         return None;
     }
 
@@ -37,18 +38,20 @@ fn parse_event_from_link(href: &str, event_text: &str) -> Option<(String, char, 
     let event_type = last_four.chars().next()?;
     
     // Check if event is a valid prelims or finals event, ignore if not
-    if !(event_type == 'P' || event_type == 'F') || 
-       !last_four[1..].chars().all(|c| c.is_ascii_digit()) {
+    if !(event_type == 'P' || event_type == 'F') || !last_four[1..].chars().all(|c| c.is_ascii_digit()) {
         return None;
     }
     
     // Get the event number (the 3 digits after P/F)
     let event_num = &last_four[1..];
     
-    // Parse the event name
-    let event_name = event_text.split_once(' ')
+    // Parse the event name, removing "Prelims" or "Finals" if present
+    let event_name = event_text
+        .split_once(' ')
         .map(|(_, rest)| rest.trim())
-        .unwrap_or(event_text);
+        .unwrap_or(event_text)
+        .replace(" Prelims", "")
+        .replace(" Finals", "");
 
     Some((
         event_num.to_string(),
@@ -62,18 +65,37 @@ fn parse_event_from_link(href: &str, event_text: &str) -> Option<(String, char, 
 }
 
 fn process_event(events: &mut HashMap<String, SwimEvent>, event_key: String, event_type: char, event: SwimEvent) {
-    if let Some(existing) = events.get(&event_key) {
-        // Alert user about duplicate event, implies file does not follow intended format
-        eprintln!("WARNING: Duplicate event found!");
-        eprintln!("  Event Number: {}", event_key);
-        eprintln!("  Existing event: {:?}", existing);
-        eprintln!("  New event: {:?}", event);
-        eprintln!("  This might indicate a parsing error or unexpected data format.");
+    if let Some(existing) = events.get_mut(&event_key) {
+        // Merge the event information based on type (Prelims or Finals)
+        match event_type {
+            'P' => {
+                if existing.prelims_link.is_some() {
+                    eprintln!("WARNING: Duplicate prelims event found!");
+                    eprintln!("  Event Number: {}", event_key);
+                    eprintln!("  Existing event: {:?}", existing);
+                    eprintln!("  New event: {:?}", event);
+                } else {
+                    existing.prelims_link = event.prelims_link;
+                }
+            },
+            'F' => {
+                if existing.finals_link.is_some() {
+                    eprintln!("WARNING: Duplicate finals event found!");
+                    eprintln!("  Event Number: {}", event_key);
+                    eprintln!("  Existing event: {:?}", existing);
+                    eprintln!("  New event: {:?}", event);
+                } else {
+                    existing.finals_link = event.finals_link;
+                }
+            },
+            _ => unreachable!(), // We validated event_type earlier
+        }
     } else {
         events.insert(event_key, event);
     }
 }
 
+// Print out each event and each of it's endpoints (Prelims and Finals)
 fn print_events(events: &HashMap<String, SwimEvent>) {
     let mut event_nums: Vec<_> = events.keys().collect();
     event_nums.sort_by(|a, b| a.parse::<i32>().unwrap_or(0).cmp(&b.parse::<i32>().unwrap_or(0)));
@@ -123,8 +145,21 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     
     print_events(&events);
     
-    // Now we have a HashMap of all events with their links
-    // We'll handle the actual event processing in page_handler.rs
+    println!("\nProcessing individual event pages...");
+    for (event_num, event) in &events {
+        // Process finals if available, otherwise prelims
+        if let Some(link) = &event.finals_link {
+            let results = process_event_page(base_url, &event.name, link).await?;
+            print_results(&results);
+        } else if let Some(link) = &event.prelims_link {
+            let results = process_event_page(base_url, &event.name, link).await?;
+            print_results(&results);
+        }
+        
+        // Add a small delay between requests to be nice to the server
+        tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+    }
+
     Ok(())
 }
 

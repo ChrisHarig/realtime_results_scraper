@@ -1,5 +1,5 @@
 use std::io::{self, Write};
-use scraper::{Html, Selector};
+use scraper::{Html, Selector, ElementRef};
 use reqwest;
 use tokio;
 use std::collections::HashMap;
@@ -10,36 +10,39 @@ use page_handler::{process_event_page, print_results};
 // Processes the index page, stores each event pair, and makes calls to process each event
 // -----------------------------------------------------------------------------------------
 
-pub struct Meet {
+pub struct Meet { //give meet the base url that it can pass down toe each event to create the full url
     events: HashMap<String, Vec<Event>>,
+    base_url: String,
     //add Date? Name? Location? 
 }
 
 impl Meet {
     //add event to meet
-    pub fn add_event(&mut self, event: Event) {
-        self.events.insert(event.name, event);
+    pub fn new(events: HashMap<String, Vec<Event>>, base_url: String) -> Meet {
+        Meet {events, base_url}
     }
 
-    pub fn process_event(&mut self, event_key: String, event_type: char, event: Event) {
-        if let Some(existing) = self.events.get_mut(&event_key) {
+    /// Adds an event to the meet or raises error if there is a duplicate event 
+    pub fn process_event(&mut self, event: Event) {
+        let event_name = event.name;
+        if let Some(existing) = self.events.get_mut(&event.name) {
             // Merge the event information based on type (Prelims or Finals)
             // Call a method in Event for this
-            match event_type {
-                Prelims => {
+            match event.e_type {
+                Event_Type::Prelims => {
                     if existing.prelims_link.is_some() {
                         eprintln!("WARNING: Duplicate prelims event found!");
-                        eprintln!("  Event Number: {}", event_key);
+                        eprintln!("  Event Number: {}", event_name);
                         eprintln!("  Existing event: {:?}", existing);
                         eprintln!("  New event: {:?}", event);
                     } else {
                         existing.prelims_link = event.prelims_link;
                     }
                 },
-                Finals => {
+                Event_Type::Finals => {
                     if existing.finals_link.is_some() {
                         eprintln!("WARNING: Duplicate finals event found!");
-                        eprintln!("  Event Number: {}", event_key);
+                        eprintln!("  Event Number: {}", event_name);
                         eprintln!("  Existing event: {:?}", existing);
                         eprintln!("  New event: {:?}", event);
                     } else {
@@ -49,7 +52,7 @@ impl Meet {
                 _ => unreachable!(), // We validated event_type earlier
             }
         } else {
-            events.insert(event_key, event);
+            self.events.insert(event.name, event);
         }
     }
 
@@ -58,7 +61,7 @@ impl Meet {
         event_nums.sort_by(|a, b| a.parse::<i32>().unwrap_or(0).cmp(&b.parse::<i32>().unwrap_or(0)));
         
         for event_num in event_nums {
-            if let Some(event) = events.get(event_num) {
+            if let Some(event) = self.events.get(event_num) {
                 println!("Event {}: {}", event_num, event.name);
                 if let Some(prelims) = &event.prelims_link {
                     println!("  Prelims: {}", prelims);
@@ -78,49 +81,49 @@ pub enum Event_Type {
     Finals,
 }
 
+pub struct Raw_Event {
+    link: ElementRef<'_>,
+    href: String,
+    text: String,
+}
+
+impl Raw_Event {
+    /// Creates a new Raw_Event if the link has valid href and text elements
+    pub fn new(link: ElementRef<'_>) -> Option<Self> {
+        // Extract href and text
+        let href = link.value().attr("href")?.to_string();
+        let text = link.text().next()?.to_string();
+        
+        // Validate link is of the correct type
+        if !href.ends_with(".htm") {
+            return None;
+        }
+        
+        Some(Raw_Event { 
+            link, 
+            href, 
+            text, 
+        })
+    }
+}
+
 #[derive(Default)]
 pub struct Event {
     name: String,
     number: u32,
-    type: Event_Type,
+    e_type: Event_Type,
     prelims_link: Option<String>,  // Some events might not have prelims
     finals_link: Option<String>,
 }
 
 impl Event {
-
-    /// Returns true if the event has a prelims link
-    pub fn has_prelims(&self) -> bool {
-        self.prelims_link.is_some()
+    pub fn new(name: String, number: u32, e_type: Event_Type, prelims_link: Option<String>, finals_link: Option<String>) -> Event {
+        Event {name, number, e_type, prelims_link, finals_link}
     }
-
-    /// Returns true if the event has a finals link 
-    pub fn has_finals(&self) -> bool {
-        self.finals_link.is_some()
-    }
-}
-
-pub struct Raw_Event {
-    link: String,
-}
-
-impl Raw_Event {
-
-    pub fn set_link(&mut self, link: String) {
-        self.link = link;
-    }
-
-    /// Gets event informating from link, if link is invlaid at any point, returns None
-    pub fn parse_event_info_from_link(&self) -> Result<Event, Box<dyn std::error::Error>> {
-        let href = self.link;
-        
-        let event = Event::default();
-
-        if !href.ends_with(".htm") {
-            return None;
-        }
-
-        let event_code = href.trim_end_matches(".htm");
+    
+    /// Creates an Event from a Raw_Event, validating event type and number
+    pub fn from_raw_event(raw_event: &Raw_Event, base_url: &str) -> Option<Self> {
+        let event_code = raw_event.href.trim_end_matches(".htm");
         
         // Validate the last 4 characters follow the pattern 'P' or 'F' followed by 3 digits
         let last_four = &event_code[event_code.len().saturating_sub(4)..];
@@ -132,39 +135,45 @@ impl Raw_Event {
         }
         
         // Get the event number (the 3 digits after P/F)
-        let event_num = &last_four[1..];
-        
+        let event_num = match last_four[1..].parse::<u32>() {
+            Ok(num) => num,
+            Err(_) => return None,
+        };
+
         // Parse the event name, removing "Prelims" or "Finals" if present
-        let event_name = event_text
+        let event_name = raw_event.text
             .split_once(' ')
             .map(|(_, rest)| rest.trim())
-            .unwrap_or(event_text)
+            .unwrap_or(&raw_event.text)
             .replace(" Prelims", "")
             .replace(" Finals", "");
 
-        // Create full URLs by combining base_url with href
-        let full_url = format!("{}/{}", base_url, href);
+        // Create full URL by combining base_url with href
+        let full_url = format!("{}/{}", base_url, &raw_event.href);
 
+        // Create the event with the appropriate type
+        let e_type = if event_type == 'P' { 
+            Event_Type::Prelims 
+        } else { 
+            Event_Type::Finals 
+        };
+        
         let (prelims_link, finals_link) = if event_type == 'P' {
             (Some(full_url), None)
         } else {
             (None, Some(full_url))
         };
 
-        Some((
-            Event {
-                name: event_name.to_string(),
-                number: event_num.to_string(),
-                type: event_type,
-                prelims_link,
-                finals_link,
-            }
-        ))
+        Some(Event {
+            name: event_name.to_string(),
+            number: event_num,
+            e_type,
+            prelims_link,
+            finals_link,
+        })
     }
-
 }
 
-//NON-IMPLEMENTED
 // Fetches the HTML from the given URL, should be an index page
 async fn fetch_html(url: &str) -> Result<String, Box<dyn std::error::Error>> {
     let response = reqwest::get(url).await?;
@@ -177,11 +186,10 @@ async fn fetch_html(url: &str) -> Result<String, Box<dyn std::error::Error>> {
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let mut meet = Meet::new();
-    let mut events = meet.events;
-
-    // Base URL for the meet results
+    // Base URL for the meet results (will eventually be passed in by a user)
     let base_url = "https://swimmeetresults.tech/NCAA-Division-I-Men-2024"; 
+
+    let mut meet = Meet::new(HashMap::new(), String::from(base_url));
     
     // Get the index page
     let index_url = format!("{}/evtindex.htm", base_url);
@@ -193,34 +201,34 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Select all links in the index
     let link_selector = Selector::parse("a").unwrap();
     
-    //DECIDE ON IMPLEMENTATION
     // Process each link
     for link in index_document.select(&link_selector) {
-        if let Some(href) = link.value().attr("href") {
-            if let Some(event_text) = link.text().next() {
-                if let Some((event_key, event_type, event)) = parse_event_from_link(href, &event_text, base_url) {
-                    process_events(&mut events, event_key, event_type, event);
-                }
+        // Create a Raw_Event if the link has valid href and text
+        if let Some(raw_event) = Raw_Event::new(link) {
+            // Create an Event from the Raw_Event, validating event type and number
+            if let Some(event) = Event::from_raw_event(&raw_event, base_url) {
+                meet.process_event(event);
             }
         }
     }
     
-    print_events(&events);
+    meet.print_events();
     
-    //MAKE-IMPLEMENTED
     println!("\nProcessing individual event pages...");
-    for (event_num, event) in &events {
-        // Process finals if available, otherwise prelims
-        if let Some(link) = &event.finals_link {
-            let results = process_event_page(&event.name, link, 'F').await?;
-            print_results(&results);
-        } else if let Some(link) = &event.prelims_link {
-            let results = process_event_page(&event.name, link, 'P').await?;
-            print_results(&results);
+    for event_num in meet.events.keys() {
+        if let Some(event) = meet.events.get(event_num) {
+            // Process finals if available, otherwise prelims
+            if let Some(link) = &event.finals_link {
+                let results = process_event_page(&event.name, link, 'F').await?;
+                print_results(&results);
+            } else if let Some(link) = &event.prelims_link {
+                let results = process_event_page(&event.name, link, 'P').await?;
+                print_results(&results);
+            }
+            
+            // Add a small delay between requests to be nice to the server
+            tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
         }
-        
-        // Add a small delay between requests to be nice to the server
-        tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
     }
 
     Ok(())

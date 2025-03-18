@@ -1,58 +1,59 @@
-use std::io::{self, Write};
 use scraper::{Html, Selector, ElementRef};
 use reqwest;
 use tokio;
 use std::collections::HashMap;
 mod page_handler;
 use page_handler::{process_event_page, print_results};
+use std::fmt;
 
 // -----------------------------------------------------------------------------------------
 // Processes the index page, stores each event pair, and makes calls to process each event
-// -----------------------------------------------------------------------------------------
+// ------------------------------------------------------------------------------------------
 
-pub struct Meet { //give meet the base url that it can pass down toe each event to create the full url
-    events: HashMap<String, Vec<Event>>,
+pub struct Meet { //give meet the base url that it can pass down to each event to create the full url
+    events: HashMap<String, Event>,
     base_url: String,
     //add Date? Name? Location? 
 }
 
 impl Meet {
     //add event to meet
-    pub fn new(events: HashMap<String, Vec<Event>>, base_url: String) -> Meet {
+    pub fn new(events: HashMap<String, Event>, base_url: String) -> Meet {
         Meet {events, base_url}
     }
 
-    /// Adds an event to the meet or raises error if there is a duplicate event 
+    pub fn append_base_url(&self, event: Event) -> Event {
+        //Choose to use this or not
+    }
+    /// Adds an event to the meet or raises error if there is a duplicate event ///---MOVE LINK VALIDATION TO EVENT---///
     pub fn process_event(&mut self, event: Event) {
-        let event_name = event.name;
-        if let Some(existing) = self.events.get_mut(&event.name) {
+        let event_name = event.name.clone();
+        if let Some(existing) = self.events.get_mut(&event_name) {
             // Merge the event information based on type (Prelims or Finals)
-            // Call a method in Event for this
-            match event.e_type {
-                Event_Type::Prelims => {
-                    if existing.prelims_link.is_some() {
-                        eprintln!("WARNING: Duplicate prelims event found!");
-                        eprintln!("  Event Number: {}", event_name);
-                        eprintln!("  Existing event: {:?}", existing);
-                        eprintln!("  New event: {:?}", event);
-                    } else {
-                        existing.prelims_link = event.prelims_link;
-                    }
+            match existing.prelims_link.is_some() {
+                true => {
+                    eprintln!("WARNING: Duplicate prelims event found!");
+                    eprintln!("  Event Number: {}", event_name);
+                    eprintln!("  Existing event: {}", existing);
+                    eprintln!("  New event: {}", event);
                 },
-                Event_Type::Finals => {
-                    if existing.finals_link.is_some() {
-                        eprintln!("WARNING: Duplicate finals event found!");
-                        eprintln!("  Event Number: {}", event_name);
-                        eprintln!("  Existing event: {:?}", existing);
-                        eprintln!("  New event: {:?}", event);
-                    } else {
-                        existing.finals_link = event.finals_link;
-                    }
+                false => {
+                    existing.prelims_link = event.prelims_link;
+                }
+            }
+            match existing.finals_link.is_some() {
+                true => {
+                    eprintln!("WARNING: Duplicate finals event found!");
+                    eprintln!("  Event Number: {}", event_name);
+                    eprintln!("  Existing event: {}", existing);
+                    eprintln!("  New event: {}", event);
                 },
-                _ => unreachable!(), // We validated event_type earlier
+                false => {
+                    existing.finals_link = event.finals_link;
+                }
             }
         } else {
-            self.events.insert(event.name, event);
+            self.events.insert(event_name, event);
         }
     }
 
@@ -76,20 +77,15 @@ impl Meet {
 
 }
 
-pub enum Event_Type {
-    Prelims,
-    Finals,
-}
-
-pub struct Raw_Event {
-    link: ElementRef<'_>,
+pub struct RawEvent<'a> {
+    link: ElementRef<'a>,
     href: String,
     text: String,
 }
 
-impl Raw_Event {
-    /// Creates a new Raw_Event if the link has valid href and text elements
-    pub fn new(link: ElementRef<'_>) -> Option<Self> {
+impl<'a> RawEvent<'a> {
+    /// Creates a new RawEvent if the link has valid href and text elements
+    pub fn new(link: ElementRef<'a>) -> Option<Self> {
         // Extract href and text
         let href = link.value().attr("href")?.to_string();
         let text = link.text().next()?.to_string();
@@ -99,7 +95,7 @@ impl Raw_Event {
             return None;
         }
         
-        Some(Raw_Event { 
+        Some(RawEvent { 
             link, 
             href, 
             text, 
@@ -107,22 +103,20 @@ impl Raw_Event {
     }
 }
 
-#[derive(Default)]
 pub struct Event {
     name: String,
     number: u32,
-    e_type: Event_Type,
-    prelims_link: Option<String>,  // Some events might not have prelims
+    prelims_link: Option<String>,
     finals_link: Option<String>,
 }
 
 impl Event {
-    pub fn new(name: String, number: u32, e_type: Event_Type, prelims_link: Option<String>, finals_link: Option<String>) -> Event {
-        Event {name, number, e_type, prelims_link, finals_link}
+    pub fn new(name: String, number: u32, prelims_link: Option<String>, finals_link: Option<String>) -> Event {
+        Event {name, number, prelims_link, finals_link}
     }
     
-    /// Creates an Event from a Raw_Event, validating event type and number
-    pub fn from_raw_event(raw_event: &Raw_Event, base_url: &str) -> Option<Self> {
+    /// Creates an Event from a RawEvent, validating event type and number
+    pub fn from_raw_event(raw_event: &RawEvent, base_url: &str) -> Option<Self> {
         let event_code = raw_event.href.trim_end_matches(".htm");
         
         // Validate the last 4 characters follow the pattern 'P' or 'F' followed by 3 digits
@@ -150,15 +144,9 @@ impl Event {
 
         // Create full URL by combining base_url with href
         let full_url = format!("{}/{}", base_url, &raw_event.href);
-
-        // Create the event with the appropriate type
-        let e_type = if event_type == 'P' { 
-            Event_Type::Prelims 
-        } else { 
-            Event_Type::Finals 
-        };
         
-        let (prelims_link, finals_link) = if event_type == 'P' {
+        // Set appropriate link based on event type
+        let (prelims_link, finals_link) = if event_type == 'P' { //should still work but double check
             (Some(full_url), None)
         } else {
             (None, Some(full_url))
@@ -167,10 +155,18 @@ impl Event {
         Some(Event {
             name: event_name.to_string(),
             number: event_num,
-            e_type,
             prelims_link,
             finals_link,
         })
+    }
+}
+
+impl fmt::Display for Event {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "Event {{ name: {}, number: {} }}", 
+            self.name, 
+            self.number,
+        )
     }
 }
 
@@ -203,9 +199,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     
     // Process each link
     for link in index_document.select(&link_selector) {
-        // Create a Raw_Event if the link has valid href and text
-        if let Some(raw_event) = Raw_Event::new(link) {
-            // Create an Event from the Raw_Event, validating event type and number
+        // Create a RawEvent if the link has valid href and text
+        if let Some(raw_event) = RawEvent::new(link) {
+            // Create an Event from the RawEvent, validating event type and number
             if let Some(event) = Event::from_raw_event(&raw_event, base_url) {
                 meet.process_event(event);
             }

@@ -1,6 +1,5 @@
 use scraper::{Html, Selector};
 use std::error::Error;
-use std::collections::HashMap;
 
 // A race split
 #[derive(Debug, Clone)]
@@ -17,7 +16,7 @@ pub struct Swimmer {
     name: String,
     year: String,
     school: String,
-    seed_time: Option<String>,
+    seed_time: Option<String>, //prelims time if the event is finals
     final_time: String,
     splits: Vec<Split>,
 }

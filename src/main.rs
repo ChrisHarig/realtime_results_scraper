@@ -221,11 +221,29 @@ async fn process_meet_pages(meet: Meet) -> Result<(), Box<dyn std::error::Error>
         if let Some(event) = meet.events.get(event_num) {
             // Process finals if available, otherwise prelims
             if let Some(link) = &event.finals_link {
-                let results = process_event_page(&event.name, link, 'F').await?;
-                print_results(&results);
+                match process_event_page(&event.name, link, 'F').await {
+                    Ok(results) => print_results(&results),
+                    Err(e) => {
+                        if e.to_string().contains("Relay events are not currently supported") {
+                            println!("Warning: Skipping relay event '{}' - {}", event.name, e);
+                        } else {
+                            // For other errors, propagate them up
+                            return Err(e);
+                        }
+                    }
+                }
             } else if let Some(link) = &event.prelims_link {
-                let results = process_event_page(&event.name, link, 'P').await?;
-                print_results(&results);
+                match process_event_page(&event.name, link, 'P').await {
+                    Ok(results) => print_results(&results),
+                    Err(e) => {
+                        if e.to_string().contains("Relay events are not currently supported") {
+                            println!("Warning: Skipping relay event '{}' - {}", event.name, e);
+                        } else {
+                            // For other errors, propagate them up
+                            return Err(e);
+                        }
+                    }
+                }
             }
             
             // Add a small delay between requests to be nice to the server
@@ -240,13 +258,68 @@ async fn process_meet_pages(meet: Meet) -> Result<(), Box<dyn std::error::Error>
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let base_url = "https://swimmeetresults.tech/NCAA-Division-I-Men-2024"; //prompt user which route to go down
-    let mut meet = process_links(base_url).await?;
+    println!("Welcome to the Swim Meet Results Parser!");
+    println!("Please select an option:");
+    println!("1. Parse a particular event's page");
+    println!("   Example: https://swimmeetresults.tech/NCAA-Division-I-Men-2024/evtF001.htm");
+    println!("2. Parse a complete meet");
+    println!("   Example: https://swimmeetresults.tech/NCAA-Division-I-Men-2024");
     
-    meet.print_events();
+    let mut input = String::new();
+    std::io::stdin().read_line(&mut input)?;
+    
+    match input.trim() {
+        "1" => {
+            // Parse an individual event page
+            println!("---Individual page parsing selected---");
+            println!("Enter the full URL to the event page:");
+            println!("Note: URL should end with .htm and include the event code (e.g., evtF001)");
+            let mut page_url = String::new();
+            std::io::stdin().read_line(&mut page_url)?;
 
-    process_meet_pages(meet).await?;
+            // Create a RawEvent if the link has valid href and text (((MAY NEED TO REMOVE FIRST PART OF LINK)))
+            if let Some(raw_event) = RawEvent::new(link) {
 
+                // Create full URL by combining base_url with href
+                let full_url = format!("{}/{}", base_url, &raw_event.href);
+            
+                // Create an event from the raw event
+                if let Some(event) = Event::from_raw_event(&raw_event, base_url) {
+                    match process_event_page(&event.name.trim(), &page_url.trim(), session).await { //debug i assume
+                        Ok(results) => print_results(&results),
+                        Err(e) => {
+                            if e.to_string().contains("Relay events are not currently supported") {
+                                println!("Warning: This is a relay event which is not currently supported.");
+                            } else {
+                                eprintln!("Error processing event: {}", e);
+                                return Err(e);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        },
+        "2" => {
+            // Parse a whole meet
+            // You'll implement the individual page parsing here
+            println!("---Meet parsing selected---");
+            println!("Enter the base URL for the meet:");
+            println!("Note: This should be the base URL without any specific event page");
+            let mut page_url = String::new();
+            std::io::stdin().read_line(&mut page_url)?;
+
+            let mut meet = process_links(page_url).await?;
+            
+            meet.print_events();
+            
+            process_meet_pages(meet).await?;
+        },
+        _ => {
+            println!("Invalid option. Please run the program again and select option 1 or 2.");
+        }
+    }
+    
     Ok(())
 }
 

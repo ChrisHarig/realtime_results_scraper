@@ -115,61 +115,86 @@ fn parse_swimmer_section(lines: &[&str]) -> Option<Swimmer> {
     // Parse all splits from remaining lines
     let mut splits = Vec::new();
     
-    // Process all lines after the main line for splits
-    for line in &lines[1..] {
-        let line = line.trim();
-        if line.is_empty() {
-            continue;
-        }
-
-        // Extract all content within parentheses
-        let mut in_parentheses = false;
-        let mut current_split = String::new();
-        
-        for c in line.chars() { //might need to add back in reaction time 
-            match c {
-                '(' => {
-                    in_parentheses = true;
-                    current_split.clear();
-                }
-                ')' => {
-                    if in_parentheses && !current_split.is_empty() {
-                        let split_time = current_split.trim().to_string();
-                        // Store split with temporary distance of 0, we'll calculate actual distances later
-                        splits.push(Split {
-                            distance: 0,
-                            time: split_time,
-                        });
-                    }
-                    in_parentheses = false;
-                }
-                _ => {
-                    if in_parentheses {
-                        current_split.push(c);
-                    }
+    // First check for reaction time in the first line after the main line
+    if lines.len() > 1 {
+        let first_line = lines[1].trim();
+        if first_line.starts_with("r:") {
+            // Extract reaction time
+            let reaction_parts: Vec<&str> = first_line.split_whitespace().collect();
+            if !reaction_parts.is_empty() {
+                splits.push(Split {
+                    distance: 0,
+                    time: reaction_parts[0].to_string(),
+                });
+                
+                // Extract first split if it's on the same line as reaction time
+                if reaction_parts.len() > 1 {
+                    splits.push(Split {
+                        distance: 50,
+                        time: reaction_parts[1].to_string(),
+                    });
                 }
             }
         }
     }
+    
+    // Process all lines for additional splits
+    for line_idx in 1..lines.len() {
+        let line = lines[line_idx].trim();
+        if line.is_empty() {
+            continue;
+        }
 
-    // Calculate and assign proper distances to splits
-    let total_splits = splits.len();
-    if total_splits > 0 {
-        // First split is usually reaction time
-        if splits[0].time.starts_with("r:") {
-            splits[0].distance = 0;
+        // Extract all splits from the line
+        let parts: Vec<&str> = line.split_whitespace().collect();
+        
+        for (i, part) in parts.iter().enumerate() {
+            // Skip reaction time which we already processed
+            if i == 0 && line_idx == 1 && part.starts_with("r:") {
+                continue;
+            }
             
-            // Remaining splits are usually at equal intervals
-            let remaining_splits = total_splits - 1;
-            if remaining_splits > 0 {
-                for i in 1..total_splits {
-                    splits[i].distance = (i as u16) * 50;
+            // Check if this part contains a time with parentheses
+            if part.contains('(') && part.contains(')') {
+                let time_start = part.find('(').unwrap() + 1;
+                let time_end = part.find(')').unwrap();
+                if time_start < time_end {
+                    let split_time = &part[time_start..time_end];
+                    
+                    // Calculate the distance based on the number of existing splits
+                    // Skip the reaction time when calculating distance
+                    let distance = if splits.is_empty() {
+                        50
+                    } else if splits[0].distance == 0 {
+                        // If we have a reaction time, adjust accordingly
+                        (splits.len() as u16) * 50
+                    } else {
+                        (splits.len() as u16 + 1) * 50
+                    };
+                    
+                    splits.push(Split {
+                        distance,
+                        time: split_time.to_string(),
+                    });
                 }
             }
-        } else {
-            // No reaction time, all splits are distance splits
-            for i in 0..total_splits {
-                splits[i].distance = ((i + 1) as u16) * 50;
+            // Check if this is a standalone time (not in parentheses)
+            else if !part.starts_with("(") && !part.ends_with(")") && 
+                    part.contains(':') || (part.contains('.') && part.chars().filter(|&c| c == '.').count() == 1) {
+                // This looks like a time without parentheses (e.g., "21.26" or "1:08.01")
+                // Only add if we don't already have a split at this position
+                let distance = if splits.is_empty() {
+                    50
+                } else if splits[0].distance == 0 {
+                    (splits.len() as u16) * 50
+                } else {
+                    (splits.len() as u16 + 1) * 50
+                };
+                
+                splits.push(Split {
+                    distance,
+                    time: part.to_string(),
+                });
             }
         }
     }

@@ -10,10 +10,9 @@ use std::fmt;
 // Processes the index page, stores each event pair, and makes calls to process each event
 // ------------------------------------------------------------------------------------------
 
-pub struct Meet { //give meet the base url that it can pass down to each event to create the full url?
+pub struct Meet { 
     events: HashMap<String, Event>,
     base_url: String,
-    //add Date? Name? Location? 
 }
 
 impl Meet {
@@ -59,6 +58,7 @@ pub struct RawEvent<'a> {
 impl<'a> RawEvent<'a> {
     /// Creates a new RawEvent if the link has valid href and text
     pub fn new(link: ElementRef<'a>) -> Option<Self> {
+
         // Extract href and text
         let href = link.value().attr("href")?.to_string();
         let text = link.text().next()?.to_string();
@@ -177,12 +177,12 @@ async fn fetch_html(url: &str) -> Result<String, Box<dyn std::error::Error>> {
     Ok(response.text().await?)
 }
 
-async fn process_links(base_url: &str) -> Result<Meet, Box<dyn std::error::Error>> {
-    // Create a new meet with an empty HashMap
-    let mut meet = Meet::new(HashMap::new(), String::from(base_url));
+async fn process_links(url: &str) -> Result<Meet, Box<dyn std::error::Error>> {
+    // Create an empty meet with the base URL
+    let mut meet = Meet::new(HashMap::new(), url.to_string());
     
     // Get the index page
-    let index_url = format!("{}/evtindex.htm", base_url);
+    let index_url = format!("{}/evtindex.htm", url);
     
     // Fetch and parse index page
     let index_html = fetch_html(&index_url).await?;
@@ -196,7 +196,7 @@ async fn process_links(base_url: &str) -> Result<Meet, Box<dyn std::error::Error
         // Create a RawEvent if the link has valid href and text
         if let Some(raw_event) = RawEvent::new(link) {
             // Create full URL by combining base_url with href
-            let full_url = format!("{}/{}", base_url, &raw_event.href);
+            let full_url = format!("{}/{}", url, &raw_event.href);
             
             // Get event with corresponding name if it exists
             if let Some(event) = meet.get_event_by_name_mut(&raw_event.event_name) {
@@ -204,7 +204,7 @@ async fn process_links(base_url: &str) -> Result<Meet, Box<dyn std::error::Error
                 event.add_link(full_url, raw_event.session);
             } else {
                 // Create a new event if it does not already exist
-                if let Some(event) = Event::from_raw_event(&raw_event, base_url) {
+                if let Some(event) = Event::from_raw_event(&raw_event, url) {
                     // Add the event to the meet using the event name as the key
                     meet.events.insert(raw_event.event_name.clone(), event);
                 }
@@ -261,7 +261,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("Welcome to the Swim Meet Results Parser!");
     println!("Please select an option:");
     println!("1. Parse a particular event's page");
-    println!("   Example: https://swimmeetresults.tech/NCAA-Division-I-Men-2024/evtF001.htm");
+    println!("   Example: https://swimmeetresults.tech/NCAA-Division-I-Men-2024/240327P003.htm");
     println!("2. Parse a complete meet");
     println!("   Example: https://swimmeetresults.tech/NCAA-Division-I-Men-2024");
     
@@ -276,43 +276,27 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             println!("Note: URL should end with .htm and include the event code (e.g., evtF001)");
             let mut page_url = String::new();
             std::io::stdin().read_line(&mut page_url)?;
+            let page_url = page_url.trim();
 
-            // Create a RawEvent if the link has valid href and text (((MAY NEED TO REMOVE FIRST PART OF LINK)))
-            if let Some(raw_event) = RawEvent::new(link) {
-
-                // Create full URL by combining base_url with href
-                let full_url = format!("{}/{}", base_url, &raw_event.href);
-            
-                // Create an event from the raw event
-                if let Some(event) = Event::from_raw_event(&raw_event, base_url) {
-                    match process_event_page(&event.name.trim(), &page_url.trim(), session).await { //debug i assume
-                        Ok(results) => print_results(&results),
-                        Err(e) => {
-                            if e.to_string().contains("Relay events are not currently supported") {
-                                println!("Warning: This is a relay event which is not currently supported.");
-                            } else {
-                                eprintln!("Error processing event: {}", e);
-                                return Err(e);
-                            }
-                        }
-                    }
-                }
-            }
-        }
+            // Process the individual page
+            handle_single_page(page_url).await?;
         },
         "2" => {
             // Parse a whole meet
-            // You'll implement the individual page parsing here
             println!("---Meet parsing selected---");
             println!("Enter the base URL for the meet:");
             println!("Note: This should be the base URL without any specific event page");
             let mut page_url = String::new();
             std::io::stdin().read_line(&mut page_url)?;
+            let page_url = page_url.trim();
 
+            // Create a meet with all events
             let mut meet = process_links(page_url).await?;
             
+            // Print all events in the meet
             meet.print_events();
-            
+
+            // Process each event page
             process_meet_pages(meet).await?;
         },
         _ => {
@@ -321,6 +305,65 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
     
     Ok(())
+}
+
+/// Handles processing of a single event page URL
+async fn handle_single_page(page_url: &str) -> Result<(), Box<dyn std::error::Error>> {
+    // Fetch the HTML content
+    let html = fetch_html(page_url).await?;
+    let document = Html::parse_document(&html);
+    
+    // Extract the base URL from the full URL
+    let base_url = page_url.rsplitn(2, '/').nth(1).unwrap_or("");
+    
+    // Extract the event filename
+    let event_filename = page_url.rsplitn(2, '/').next().unwrap_or("");
+    
+    // Create a mock link element to use with RawEvent
+    let mock_html = format!(r#"<a href="{}">{}</a>"#, event_filename, "Event Link");
+    let mock_doc = Html::parse_fragment(&mock_html);
+    let link_selector = Selector::parse("a").unwrap();
+    
+    if let Some(link) = mock_doc.select(&link_selector).next() {
+        // Use our existing RawEvent logic to validate and extract information
+        if let Some(raw_event) = RawEvent::new(link) {
+            // Extract event name from the actual page HTML
+            let event_selector = Selector::parse("b").unwrap();
+            let mut event_name = String::new();
+            
+            for element in document.select(&event_selector) {
+                let text = element.text().collect::<String>();
+                if text.contains("Event") {
+                    event_name = text.trim().to_string();
+                    break;
+                }
+            }
+            
+            if event_name.is_empty() {
+                return Err("Could not find event name in the HTML".into());
+            }
+            
+            // Process the event page using the session from raw_event
+            match process_event_page(&event_name, page_url, raw_event.session).await {
+                Ok(results) => {
+                    print_results(&results);
+                    Ok(())
+                },
+                Err(e) => {
+                    if e.to_string().contains("Relay events are not currently supported") {
+                        println!("Warning: This is a relay event which is not currently supported.");
+                        Ok(())
+                    } else {
+                        Err(e)
+                    }
+                }
+            }
+        } else {
+            Err("Failed to validate event URL format using RawEvent structure".into())
+        }
+    } else {
+        Err("Failed to create mock link element".into())
+    }
 }
 
 

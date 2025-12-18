@@ -1,9 +1,21 @@
 [package]
-name = "Realtime_Results_Scraper"
+name = "realtime_results_scraper"
 version = "0.1.0"
 edition = "2021"
+
+[lib]
+name = "realtime_results_scraper"
+path = "src/lib.rs"
+
+[[bin]]
+name = "realtime_results_scraper"
+path = "src/main.rs"
 
 [dependencies]
 scraper = "0.18"
 reqwest = "0.11"
 tokio = { version = "1.36", features = ["full"] }
+futures = "0.3"
+serde = { version = "1.0", features = ["derive"] }
+csv = "1.3"
+clap = { version = "4.5", features = ["derive"] }

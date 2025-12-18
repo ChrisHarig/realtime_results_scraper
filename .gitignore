@@ -6,3 +6,5 @@
 # Ignore html files
 *.html
 *.htm
+
+*.csv

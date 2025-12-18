@@ -1,25 +1,20 @@
 use scraper::{Html, Selector, ElementRef};
 use std::collections::HashMap;
 use std::error::Error;
-use futures::future::join_all;
 
-use crate::{process_event, ParsedEvent, fetch_html};
-use crate::event_handler::EventResults;
-use crate::relay_handler::RelayResults;
-
-const VALID_DOMAIN: &str = "swimmeetresults.tech";
+use crate::utils::fetch_html;
 
 // ============================================================================
 // DATA STRUCTURES
 // ============================================================================
 
-// Meet structure - contains all events and meets page
+/// Meet containing all events and base URL
 pub struct Meet {
     pub events: HashMap<String, Event>,
     pub base_url: String,
 }
 
-// Event within a meet (links to prelims/finals pages)
+/// Event with links to prelims and finals pages
 pub struct Event {
     pub name: String,
     pub number: u32,
@@ -27,7 +22,7 @@ pub struct Event {
     pub finals_link: Option<String>,
 }
 
-// Parsed info from an event link on the index page
+/// Parsed event link from index page
 struct EventLink {
     href: String,
     event_name: String,
@@ -36,6 +31,7 @@ struct EventLink {
 }
 
 impl Meet {
+    /// Creates a new Meet with the given base URL.
     pub fn new(base_url: String) -> Meet {
         Meet {
             events: HashMap::new(),
@@ -43,29 +39,19 @@ impl Meet {
         }
     }
 
+    /// Adds an event to the meet.
     pub fn add_event(&mut self, name: String, event: Event) {
         self.events.insert(name, event);
     }
 
+    /// Returns a mutable reference to an event by name.
     pub fn get_event_mut(&mut self, name: &str) -> Option<&mut Event> {
         self.events.get_mut(name)
-    }
-
-    pub fn print_events(&self) {
-        for (name, event) in &self.events {
-            println!("Event {}: {}", event.number, name);
-            if let Some(prelims) = &event.prelims_link {
-                println!("  Prelims: {}", prelims);
-            }
-            if let Some(finals) = &event.finals_link {
-                println!("  Finals: {}", finals);
-            }
-            println!();
-        }
     }
 }
 
 impl Event {
+    /// Creates a new Event with name and number.
     pub fn new(name: String, number: u32) -> Event {
         Event {
             name,
@@ -75,44 +61,38 @@ impl Event {
         }
     }
 
+    /// Sets the prelims or finals link based on session.
     pub fn set_link(&mut self, link: String, session: char) {
         match session {
             'P' => self.prelims_link = Some(link),
             'F' => self.finals_link = Some(link),
-            _ => eprintln!("WARNING: Invalid session '{}'", session),
+            _ => {}
         }
     }
 }
 
 impl EventLink {
-    /// Extract event info from an index page link. Returns None for non-event links.
+    /// Extracts event info from an index page link element.
     fn from_element(link: ElementRef) -> Option<Self> {
         let href = link.value().attr("href")?.to_string();
         let text = link.text().next()?.to_string();
 
-        // Must be a .htm file
         if !href.ends_with(".htm") {
-            eprintln!("Skipping non-htm link: {}", href);
             return None;
         }
 
         let code = href.trim_end_matches(".htm");
         if code.len() < 4 {
-            eprintln!("Skipping link with short code: {}", href);
             return None;
         }
 
-        // Check for session type (P or F) at expected position
         let session = code.chars().nth(code.len() - 4)?;
         if session != 'P' && session != 'F' {
-            eprintln!("Skipping link without P/F session marker: {}", href);
             return None;
         }
 
-        // Extract event number (used for display)
         let event_num = code[code.len() - 3..].parse().unwrap_or(0);
 
-        // Clean up event name: remove "Event X" prefix and "Prelims"/"Finals" suffix
         let event_name = text
             .split_once(' ')
             .map(|(_, rest)| rest.trim())
@@ -125,75 +105,10 @@ impl EventLink {
 }
 
 // ============================================================================
-// URL VALIDATION
+// MEET INDEX PARSING
 // ============================================================================
 
-/// Validates an event URL has correct structure, returns session type (P or F)
-pub fn validate_event_url(url: &str) -> Result<char, Box<dyn Error>> {
-    let url = url.trim_end_matches('/');
-
-    if !url.contains(VALID_DOMAIN) {
-        return Err(format!("Invalid domain - expected {}", VALID_DOMAIN).into());
-    }
-
-    if !url.ends_with(".htm") {
-        return Err("Event URL must end with .htm".into());
-    }
-
-    let filename = url.rsplit('/').next().unwrap_or("");
-    let code = filename.trim_end_matches(".htm");
-
-    if code.len() < 10 {
-        return Err(format!(
-            "Invalid event filename '{}' - expected pattern like 240327F003.htm",
-            filename
-        ).into());
-    }
-
-    let session = code.chars().nth(code.len() - 4).unwrap_or('?');
-    if session != 'P' && session != 'F' {
-        return Err(format!(
-            "Invalid session type '{}' in filename - expected 'P' (prelims) or 'F' (finals)",
-            session
-        ).into());
-    }
-
-    let event_num = &code[code.len() - 3..];
-    if !event_num.chars().all(|c| c.is_ascii_digit()) {
-        return Err(format!(
-            "Invalid event number '{}' - expected 3 digits",
-            event_num
-        ).into());
-    }
-
-    Ok(session)
-}
-
-/// Validates a meet URL has correct structure
-pub fn validate_meet_url(url: &str) -> Result<(), Box<dyn Error>> {
-    let url = url.trim_end_matches('/');
-
-    if !url.contains(VALID_DOMAIN) {
-        return Err(format!("Invalid domain - expected {}", VALID_DOMAIN).into());
-    }
-
-    if url.ends_with(".htm") {
-        return Err("Meet URL should not end with .htm - use an event URL instead".into());
-    }
-
-    let after_domain = url.split(VALID_DOMAIN).nth(1).unwrap_or("");
-    if after_domain.trim_matches('/').is_empty() {
-        return Err("Missing meet name in URL - expected format: https://swimmeetresults.tech/Meet-Name".into());
-    }
-
-    Ok(())
-}
-
-// ============================================================================
-// MEET PROCESSING
-// ============================================================================
-
-/// Parse a meet index page and return the Meet structure with all event links
+/// Fetches and parses a meet index page, returning a Meet with all event links.
 pub async fn parse_meet_index(url: &str) -> Result<Meet, Box<dyn Error>> {
     let url = url.trim_end_matches('/');
     let mut meet = Meet::new(url.to_string());
@@ -218,46 +133,4 @@ pub async fn parse_meet_index(url: &str) -> Result<Meet, Box<dyn Error>> {
     }
 
     Ok(meet)
-}
-
-/// Process all events in a meet and return results (individual events and relay events)
-pub async fn process_meet(url: &str) -> Result<(Vec<EventResults>, Vec<RelayResults>), Box<dyn Error>> {
-    validate_meet_url(url)?;
-
-    let meet = parse_meet_index(url).await?;
-
-    // Collect all event tasks
-    let event_tasks: Vec<(String, String, char)> = meet.events.iter()
-        .flat_map(|(_, event)| {
-            [(&event.prelims_link, 'P'), (&event.finals_link, 'F')]
-                .into_iter()
-                .filter_map(|(link, session)| {
-                    link.as_ref().map(|l| (event.name.clone(), l.clone(), session))
-                })
-        })
-        .collect();
-
-    // Process all events in parallel - process_event handles relay detection
-    let futures: Vec<_> = event_tasks.iter()
-        .map(|(_, link, session)| process_event(link, *session))
-        .collect();
-
-    let results = join_all(futures).await;
-
-    // Separate results by type
-    let mut individual_results = Vec::new();
-    let mut relay_results = Vec::new();
-
-    for (i, result) in results.into_iter().enumerate() {
-        let event_name = &event_tasks[i].0;
-        match result {
-            Ok(ParsedEvent::Individual(er)) => individual_results.push(er),
-            Ok(ParsedEvent::Relay(rr)) => relay_results.push(rr),
-            Err(e) => {
-                eprintln!("Error processing {}: {}", event_name, e);
-            }
-        }
-    }
-
-    Ok((individual_results, relay_results))
 }

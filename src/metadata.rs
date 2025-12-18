@@ -4,7 +4,7 @@ use scraper::{Html, Selector};
 // DATA STRUCTURES
 // ============================================================================
 
-/// Metadata extracted from the header of an event page
+/// Metadata extracted from event page header
 #[derive(Debug, Clone)]
 pub struct EventMetadata {
     pub venue: Option<String>,
@@ -13,21 +13,20 @@ pub struct EventMetadata {
     pub records: Vec<String>,
 }
 
-/// Information about the race type parsed from the event headline
-/// Fields are extracted by token classification for flexibility with format variations
+/// Race type information parsed from event headline
 #[derive(Debug, Clone)]
 pub struct RaceInfo {
     pub event_number: u32,
     pub gender: Option<String>,
     pub distance: Option<u16>,
-    pub course: Option<String>,  // "Yard", "Meter", "LC Meter", "SC Yard", etc.
+    pub course: Option<String>,
     pub stroke: Option<String>,
     pub is_relay: bool,
-    pub other: Vec<String>,      // Age groups, unrecognized tokens, etc.
+    pub other: Vec<String>,
 }
 
 impl RaceInfo {
-    /// Returns course code: SCY, SCM, LCM, or None
+    /// Returns course code (SCY, SCM, LCM) based on course string.
     pub fn course_code(&self) -> Option<&'static str> {
         let course = self.course.as_ref()?.to_lowercase();
         if course.contains("yard") {
@@ -37,7 +36,7 @@ impl RaceInfo {
         } else if course.contains("sc") || course.contains("short") {
             Some("SCM")
         } else if course.contains("meter") {
-            Some("LCM") // Default meters to LCM
+            Some("LCM")
         } else {
             None
         }
@@ -49,9 +48,7 @@ impl RaceInfo {
 // ============================================================================
 
 const GENDERS: &[&str] = &["Men", "Women", "Boys", "Girls", "Mixed", "Male", "Female"];
-
 const COURSE_WORDS: &[&str] = &["Yard", "Yards", "Meter", "Meters", "LC", "SC", "Long", "Short"];
-
 const STROKES: &[&str] = &[
     "Freestyle", "Free",
     "Backstroke", "Back",
@@ -65,19 +62,13 @@ const STROKES: &[&str] = &[
 // PARSING - RACE INFO
 // ============================================================================
 
-/// Parse race information from event headline using token classification
-/// Handles variations like:
-/// - "Event 10  Men 200 Yard IM"
-/// - "Event 10  Men 13-14 200 Yard IM"
-/// - "Event 10  Boys 200 LC Meter Freestyle"
+/// Parses race information from event headline using token classification.
 pub fn parse_race_info(headline: &str) -> Option<RaceInfo> {
     let tokens: Vec<&str> = headline.split_whitespace().collect();
 
-    // First two must be "Event" and a number
     let event_idx = tokens.iter().position(|&t| t.eq_ignore_ascii_case("Event"))?;
     let event_number: u32 = tokens.get(event_idx + 1)?.parse().ok()?;
 
-    // Classify remaining tokens
     let remaining = &tokens[event_idx + 2..];
 
     let mut gender: Option<String> = None;
@@ -96,19 +87,16 @@ pub fn parse_race_info(headline: &str) -> Option<RaceInfo> {
         } else if is_stroke_word(token) {
             stroke_parts.push(token.to_string());
         } else {
-            // Unknown token (age groups, etc.)
             other.push(token.to_string());
         }
     }
 
-    // Combine course parts (e.g., ["LC", "Meter"] -> "LC Meter")
     let course = if course_parts.is_empty() {
         None
     } else {
         Some(course_parts.join(" "))
     };
 
-    // Combine stroke parts (e.g., ["Individual", "Medley"] -> "Individual Medley")
     let stroke = if stroke_parts.is_empty() {
         None
     } else {
@@ -148,8 +136,7 @@ fn is_stroke_word(token: &str) -> bool {
 // PARSING - METADATA
 // ============================================================================
 
-/// Extract metadata from the HTML document (venue, meet name, records)
-/// Preserves order of appearance in the header
+/// Extracts metadata (venue, meet name, records) from HTML document.
 pub fn parse_event_metadata(html: &str) -> Option<EventMetadata> {
     let document = Html::parse_document(html);
     let pre_selector = Selector::parse("pre").unwrap();
@@ -170,34 +157,28 @@ pub fn parse_event_metadata(html: &str) -> Option<EventMetadata> {
             continue;
         }
 
-        // Look for event headline
         if trimmed.contains("Event") && trimmed.chars().any(|c| c.is_ascii_digit()) {
             event_headline = trimmed.to_string();
             found_event = true;
             continue;
         }
 
-        // Collect header info (before event headline) in order
         if !found_event {
             header_lines.push(trimmed.to_string());
             continue;
         }
 
-        // After event headline, look for records (lines with times)
         if found_event {
-            // Records typically have a colon (time format like 1:44.81)
             if trimmed.contains(':') && trimmed.chars().filter(|c| c.is_ascii_digit()).count() >= 4 {
                 records.push(trimmed.to_string());
             }
 
-            // Stop collecting when we hit the results (starts with place number, no colon)
-            if trimmed.chars().next().map_or(false, |c| c.is_ascii_digit()) && !trimmed.contains(':') {
+            if trimmed.chars().next().is_some_and(|c| c.is_ascii_digit()) && !trimmed.contains(':') {
                 break;
             }
         }
     }
 
-    // Extract venue and meet name from header lines (first two non-empty lines typically)
     let venue = header_lines.first().cloned();
     let meet_name = header_lines.get(1).cloned();
 
@@ -209,7 +190,7 @@ pub fn parse_event_metadata(html: &str) -> Option<EventMetadata> {
     })
 }
 
-/// Extract event name from HTML bold tag
+/// Extracts event name from HTML bold tag.
 pub fn extract_event_name(html: &str) -> Option<String> {
     let document = Html::parse_document(html);
     let selector = Selector::parse("b").unwrap();

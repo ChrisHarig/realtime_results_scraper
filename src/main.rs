@@ -45,6 +45,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let url = url.trim();
     println!("Parsing: {}\n", url);
 
+    // Enter parse flow
     let (individual_results, relay_results) = parse(url).await?;
 
     match args.output {
@@ -62,7 +63,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             for event_results in &individual_results {
                 print_results_with_options(event_results, &options);
             }
-
             for relay_event in &relay_results {
                 print_relay_results_with_options(relay_event, &options);
             }

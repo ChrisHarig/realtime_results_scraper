@@ -10,9 +10,8 @@ const RELAY_CSV_OUTPUT_FILE: &str = "relay_results.csv";
 // INDIVIDUAL CSV OUTPUT
 // ============================================================================
 
-/// Write results to results.csv (overwrites existing file)
+/// Writes individual event results to results.csv.
 pub fn write_csv(results: &[EventResults]) -> Result<(), Box<dyn Error>> {
-    // Find max number of splits across all swimmers
     let max_splits = results.iter()
         .flat_map(|e| e.swimmers.iter())
         .map(|s| s.splits.len())
@@ -22,13 +21,11 @@ pub fn write_csv(results: &[EventResults]) -> Result<(), Box<dyn Error>> {
     let file = File::create(CSV_OUTPUT_FILE)?;
     let mut writer = csv::Writer::from_writer(file);
 
-    // Write header manually to include dynamic split columns
     let mut header: Vec<&str> = vec![
         "event_name", "session", "event_number", "gender", "distance",
         "course", "stroke", "place", "name", "year", "school", "seed_time", "final_time", "reaction_time"
     ];
 
-    // Add split column headers
     let split_headers: Vec<String> = (1..=max_splits).map(|i| format!("split{}", i)).collect();
     let split_header_refs: Vec<&str> = split_headers.iter().map(|s| s.as_str()).collect();
     header.extend(split_header_refs);
@@ -38,7 +35,6 @@ pub fn write_csv(results: &[EventResults]) -> Result<(), Box<dyn Error>> {
     for event in results {
         let session = if event.session == 'P' { "Prelims" } else { "Finals" };
 
-        // Extract race info with defaults
         let (event_number, gender, distance, course, stroke) = if let Some(ref info) = event.race_info {
             (
                 info.event_number,
@@ -52,7 +48,10 @@ pub fn write_csv(results: &[EventResults]) -> Result<(), Box<dyn Error>> {
         };
 
         for swimmer in &event.swimmers {
-            // Build row with base fields
+            let place_str = match swimmer.place {
+                Some(p) => p.to_string(),
+                None => String::new(),
+            };
             let mut row: Vec<String> = vec![
                 event.event_name.clone(),
                 session.to_string(),
@@ -61,7 +60,7 @@ pub fn write_csv(results: &[EventResults]) -> Result<(), Box<dyn Error>> {
                 distance.to_string(),
                 course.clone(),
                 stroke.clone(),
-                swimmer.place.to_string(),
+                place_str,
                 swimmer.name.clone(),
                 swimmer.year.clone(),
                 swimmer.school.clone(),
@@ -70,7 +69,6 @@ pub fn write_csv(results: &[EventResults]) -> Result<(), Box<dyn Error>> {
                 swimmer.reaction_time.clone().unwrap_or_default(),
             ];
 
-            // Add splits (pad with empty strings if fewer than max)
             for i in 0..max_splits {
                 if i < swimmer.splits.len() {
                     row.push(swimmer.splits[i].time.clone());
@@ -92,7 +90,7 @@ pub fn write_csv(results: &[EventResults]) -> Result<(), Box<dyn Error>> {
 // OUTPUT FORMATTING
 // ============================================================================
 
-/// Output options for stdout display
+/// Configuration for stdout display
 #[derive(Debug, Clone)]
 pub struct OutputOptions {
     pub metadata: bool,
@@ -104,16 +102,15 @@ impl Default for OutputOptions {
     }
 }
 
-/// Print results with default options (metadata enabled)
+/// Prints individual results with default options.
 pub fn print_results(results: &EventResults) {
     print_results_with_options(results, &OutputOptions::default());
 }
 
-/// Print results with custom options
+/// Prints individual results with custom options.
 pub fn print_results_with_options(results: &EventResults, options: &OutputOptions) {
     let session_str = if results.session == 'P' { "Prelims" } else { "Finals" };
 
-    // Print metadata if enabled
     if options.metadata {
         if let Some(ref meta) = results.metadata {
             if let Some(ref venue) = meta.venue {
@@ -130,7 +127,6 @@ pub fn print_results_with_options(results: &EventResults, options: &OutputOption
             }
         }
 
-        // Print race info if available
         if let Some(ref info) = results.race_info {
             let gender = info.gender.as_deref().unwrap_or("?");
             let distance = info.distance.map(|d| d.to_string()).unwrap_or_else(|| "?".to_string());
@@ -146,9 +142,13 @@ pub fn print_results_with_options(results: &EventResults, options: &OutputOption
     println!("{:-<80}", "");
 
     for swimmer in &results.swimmers {
+        let place_str = match swimmer.place {
+            Some(p) => format!("{:2}", p),
+            None => "--".to_string(),
+        };
         println!(
-            "{:2}. {:25} {:2} {:20} {}",
-            swimmer.place,
+            "{}. {:25} {:2} {:20} {}",
+            place_str,
             swimmer.name,
             swimmer.year,
             swimmer.school,
@@ -169,13 +169,12 @@ pub fn print_results_with_options(results: &EventResults, options: &OutputOption
 // RELAY CSV OUTPUT
 // ============================================================================
 
-/// Write relay results to relay_results.csv (overwrites existing file)
+/// Writes relay results to relay_results.csv.
 pub fn write_relay_csv(results: &[RelayResults]) -> Result<(), Box<dyn Error>> {
     if results.is_empty() {
         return Ok(());
     }
 
-    // Find max number of splits across all teams
     let max_splits = results.iter()
         .flat_map(|e| e.teams.iter())
         .map(|t| t.splits.len())
@@ -185,16 +184,14 @@ pub fn write_relay_csv(results: &[RelayResults]) -> Result<(), Box<dyn Error>> {
     let file = File::create(RELAY_CSV_OUTPUT_FILE)?;
     let mut writer = csv::Writer::from_writer(file);
 
-    // Write header
     let mut header: Vec<&str> = vec![
         "event_name", "session", "event_number", "gender", "distance", "course", "stroke",
-        "place", "team_name", "seed_time", "final_time",
+        "place", "team_name", "seed_time", "final_time", "dq_description",
         "swimmer1_name", "swimmer1_year", "swimmer2_name", "swimmer2_year",
         "swimmer3_name", "swimmer3_year", "swimmer4_name", "swimmer4_year",
         "swimmer1_reaction", "swimmer2_reaction", "swimmer3_reaction", "swimmer4_reaction"
     ];
 
-    // Add split column headers
     let split_headers: Vec<String> = (1..=max_splits).map(|i| format!("split{}", i)).collect();
     let split_header_refs: Vec<&str> = split_headers.iter().map(|s| s.as_str()).collect();
     header.extend(split_header_refs);
@@ -204,7 +201,6 @@ pub fn write_relay_csv(results: &[RelayResults]) -> Result<(), Box<dyn Error>> {
     for event in results {
         let session = if event.session == 'P' { "Prelims" } else { "Finals" };
 
-        // Extract race info with defaults
         let (event_number, gender, distance, course, stroke) = if let Some(ref info) = event.race_info {
             (
                 info.event_number,
@@ -218,7 +214,10 @@ pub fn write_relay_csv(results: &[RelayResults]) -> Result<(), Box<dyn Error>> {
         };
 
         for team in &event.teams {
-            // Build row with base fields
+            let place_str = match team.place {
+                Some(p) => p.to_string(),
+                None => String::new(),
+            };
             let mut row: Vec<String> = vec![
                 event.event_name.clone(),
                 session.to_string(),
@@ -227,13 +226,13 @@ pub fn write_relay_csv(results: &[RelayResults]) -> Result<(), Box<dyn Error>> {
                 distance.to_string(),
                 course.clone(),
                 stroke.clone(),
-                team.place.to_string(),
+                place_str,
                 team.team_name.clone(),
                 team.seed_time.clone().unwrap_or_default(),
                 team.final_time.clone(),
+                team.dq_description.clone().unwrap_or_default(),
             ];
 
-            // Add swimmer names and years (4 swimmers)
             for i in 0..4 {
                 if i < team.swimmers.len() {
                     row.push(team.swimmers[i].name.clone());
@@ -244,7 +243,6 @@ pub fn write_relay_csv(results: &[RelayResults]) -> Result<(), Box<dyn Error>> {
                 }
             }
 
-            // Add swimmer reaction times (4 swimmers)
             for i in 0..4 {
                 if i < team.swimmers.len() {
                     row.push(team.swimmers[i].reaction_time.clone().unwrap_or_default());
@@ -253,7 +251,6 @@ pub fn write_relay_csv(results: &[RelayResults]) -> Result<(), Box<dyn Error>> {
                 }
             }
 
-            // Add splits (pad with empty strings if fewer than max)
             for i in 0..max_splits {
                 if i < team.splits.len() {
                     row.push(team.splits[i].time.clone());
@@ -275,16 +272,15 @@ pub fn write_relay_csv(results: &[RelayResults]) -> Result<(), Box<dyn Error>> {
 // RELAY OUTPUT FORMATTING
 // ============================================================================
 
-/// Print relay results with default options (metadata enabled)
+/// Prints relay results with default options.
 pub fn print_relay_results(results: &RelayResults) {
     print_relay_results_with_options(results, &OutputOptions::default());
 }
 
-/// Print relay results with custom options
+/// Prints relay results with custom options.
 pub fn print_relay_results_with_options(results: &RelayResults, options: &OutputOptions) {
     let session_str = if results.session == 'P' { "Prelims" } else { "Finals" };
 
-    // Print metadata if enabled
     if options.metadata {
         if let Some(ref meta) = results.metadata {
             if let Some(ref venue) = meta.venue {
@@ -301,7 +297,6 @@ pub fn print_relay_results_with_options(results: &RelayResults, options: &Output
             }
         }
 
-        // Print race info if available
         if let Some(ref info) = results.race_info {
             let gender = info.gender.as_deref().unwrap_or("?");
             let distance = info.distance.map(|d| d.to_string()).unwrap_or_else(|| "?".to_string());
@@ -316,14 +311,21 @@ pub fn print_relay_results_with_options(results: &RelayResults, options: &Output
     println!("{:-<80}", "");
 
     for team in &results.teams {
+        let place_str = match team.place {
+            Some(p) => format!("{:2}", p),
+            None => "--".to_string(),
+        };
         println!(
-            "{:2}. {:25} {}",
-            team.place,
+            "{}. {:25} {}",
+            place_str,
             team.team_name,
             team.final_time
         );
 
-        // Print swimmers
+        if let Some(ref desc) = team.dq_description {
+            println!("    {}", desc);
+        }
+
         for (i, swimmer) in team.swimmers.iter().enumerate() {
             let reaction = swimmer.reaction_time.as_deref().unwrap_or("");
             println!(

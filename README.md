@@ -1,20 +1,53 @@
+# Realtime Results Scraper
 
-## Description
-A small parser in rust to get meet results from https://swimmeetresults.tech/ results pages. 
+A Rust CLI tool to parse swimming meet results from [swimmeetresults.tech](https://swimmeetresults.tech/).
 
-As of December 10th 2025, all realtime results url's follow the same url scheme and DOM structure, so this parser should work on any realtime results page. 
+Works with any realtime results page - pass a meet URL to scrape all events, or a specific event URL.
 
-Some meets can be found on the home page: https://swimmeetresults.tech/. The link structure for a meet: https://swimmeetresults.tech/NCAA-Division-I-Men-2025/, and a specific event: https://swimmeetresults.tech/NCAA-Division-I-Men-2025/250326F001.htm. 
-
-The parser returns the results for either a whole meet or a page in your desired format. 
+**Expected format:** Standard HyTek meet results pages where the index displays all events, and each link is a `.htm` file containing one event's results.
 
 ## Usage
 
-Fill in information here 
-- pass in a link (either meet or event)
-- default ouput is text?
-- output flag
-- logging flag
+```bash
+# Parse entire meet
+realtime_results_scraper <MEET_URL>
 
-Thats all. 
+# Parse single event
+realtime_results_scraper <EVENT_URL>
 
+# Output to stdout instead of CSV
+realtime_results_scraper -o stdout <URL>
+
+# Only include top N placements
+realtime_results_scraper -t 8 <URL>
+
+# Disable metadata files
+realtime_results_scraper --no-metadata <URL>
+```
+
+## Output
+
+**Meet URL** creates:
+```
+MeetName_datetime_random/
+├── EventName_datetime_random/
+│   ├── results_EventName_datetime_random.csv
+│   └── metadata_EventName_datetime_random.csv
+...
+```
+
+**Event URL** creates:
+```
+MeetName_datetime_random/
+└── EventName_datetime_random/
+    ├── results_EventName_datetime_random.csv
+    └── metadata_EventName_datetime_random.csv
+```
+
+Each folder/file includes a unique timestamp and random suffix to prevent overwrites.
+
+## Building
+
+```bash
+cargo build --release
+```

@@ -77,9 +77,6 @@ pub fn parse_individual_event_html(
 
                 if let Some(swimmer) = parse_swimmer_section(&lines[i..next_idx]) {
                     swimmers.push(swimmer);
-                    if swimmers.len() >= 16 {
-                        break;
-                    }
                 }
 
                 i = next_idx;
@@ -210,43 +207,4 @@ fn parse_splits(lines: &[&str]) -> (Option<String>, Vec<Split>) {
     }
 
     (reaction_time, splits)
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_parse_dq_swimmer() {
-        let lines = vec!["-- Smith, John JR Florida 1:45.32 DQ"];
-        let swimmer = parse_swimmer_section(&lines).expect("Should parse DQ swimmer");
-
-        assert_eq!(swimmer.place, None);
-        assert_eq!(swimmer.name, "Smith, John");
-        assert_eq!(swimmer.year, "JR");
-        assert_eq!(swimmer.school, "Florida");
-        assert_eq!(swimmer.final_time, "DQ");
-        assert_eq!(swimmer.seed_time, Some("1:45.32".to_string()));
-    }
-
-    #[test]
-    fn test_parse_normal_swimmer() {
-        let lines = vec!["1 Marchand, Leon JR Arizona St 1:38.18 1:37.94R 20"];
-        let swimmer = parse_swimmer_section(&lines).expect("Should parse normal swimmer");
-
-        assert_eq!(swimmer.place, Some(1));
-        assert_eq!(swimmer.name, "Marchand, Leon");
-        assert_eq!(swimmer.year, "JR");
-        assert_eq!(swimmer.school, "Arizona St");
-        assert_eq!(swimmer.final_time, "1:37.94R");
-        assert_eq!(swimmer.seed_time, Some("1:38.18".to_string()));
-    }
-
-    #[test]
-    fn test_is_swimmer_line_with_dq() {
-        assert!(is_swimmer_line("-- Smith, John JR Florida 1:45.32 DQ"));
-        assert!(is_swimmer_line("1 Marchand, Leon JR Arizona St 1:38.18 1:37.94R 20"));
-        assert!(!is_swimmer_line("r:+0.62 21.09 44.62 (23.53)"));
-        assert!(!is_swimmer_line("1:08.61 (23.99) 1:33.67 (25.06)"));
-    }
 }

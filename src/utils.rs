@@ -1,4 +1,20 @@
 use std::error::Error;
+use chrono::Local;
+
+/// Generates a unique ID using datetime
+pub fn generate_unique_id() -> String {
+    Local::now().format("%Y%m%d_%H%M%S").to_string()
+}
+
+/// Sanitizes a string for use as a folder/file name
+pub fn sanitize_name(name: &str) -> String {
+    name.chars()
+        .filter(|c| c.is_alphanumeric() || *c == ' ' || *c == '-' || *c == '_')
+        .collect::<String>()
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join("_")
+}
 
 /// Fetches HTML content from a URL
 pub async fn fetch_html(url: &str) -> Result<String, Box<dyn Error>> {

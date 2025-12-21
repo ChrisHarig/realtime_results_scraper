@@ -8,10 +8,11 @@ use crate::utils::fetch_html;
 // DATA STRUCTURES
 // ============================================================================
 
-/// Meet containing all events and base URL
+/// Meet containing all events, base URL, and meet title
 pub struct Meet {
     pub events: HashMap<String, Event>,
     pub base_url: String,
+    pub title: Option<String>,
 }
 
 /// Event with links to prelims and finals pages
@@ -36,7 +37,13 @@ impl Meet {
         Meet {
             events: HashMap::new(),
             base_url,
+            title: None,
         }
+    }
+
+    /// Sets the meet title
+    pub fn set_title(&mut self, title: String) {
+        self.title = Some(title);
     }
 
     /// Adds an event to the meet
@@ -108,6 +115,47 @@ impl EventLink {
 // MEET INDEX PARSING
 // ============================================================================
 
+/// Extracts the meet title from the index page HTML
+fn extract_meet_title(html: &str) -> Option<String> {
+    let document = Html::parse_document(html);
+
+    // Try to find title in first <h2> tag
+    let h2_selector = Selector::parse("h2").ok()?;
+    if let Some(h2) = document.select(&h2_selector).next() {
+        let text = h2.text().collect::<String>();
+        let trimmed = text.trim();
+        if !trimmed.is_empty() {
+            return Some(trimmed.to_string());
+        }
+    }
+
+    // Fallback: try <pre> tag
+    let pre_selector = Selector::parse("pre").ok()?;
+    if let Some(pre) = document.select(&pre_selector).next() {
+        let content = pre.text().collect::<String>();
+        for line in content.lines() {
+            let trimmed = line.trim();
+            if trimmed.is_empty() || trimmed.starts_with('-') || trimmed.starts_with('=') {
+                continue;
+            }
+            if !trimmed.is_empty() && !trimmed.to_lowercase().contains("event") {
+                return Some(trimmed.to_string());
+            }
+        }
+    }
+
+    // Fallback: try HTML title tag
+    let title_selector = Selector::parse("title").ok()?;
+    if let Some(title) = document.select(&title_selector).next() {
+        let text = title.text().collect::<String>();
+        if !text.is_empty() {
+            return Some(text.trim().to_string());
+        }
+    }
+
+    None
+}
+
 /// Fetches and parses a meet index page, returning a Meet with all event links
 pub async fn parse_meet_index(url: &str) -> Result<Meet, Box<dyn Error>> {
     let url = url.trim_end_matches('/');
@@ -115,6 +163,12 @@ pub async fn parse_meet_index(url: &str) -> Result<Meet, Box<dyn Error>> {
 
     let index_url = format!("{}/evtindex.htm", url);
     let html = fetch_html(&index_url).await?;
+
+    // Extract meet title
+    if let Some(title) = extract_meet_title(&html) {
+        meet.set_title(title);
+    }
+
     let document = Html::parse_document(&html);
     let selector = Selector::parse("a").unwrap();
 

@@ -2,6 +2,12 @@
 name = "realtime_results_scraper"
 version = "0.1.0"
 edition = "2021"
+authors = ["Chris Harig"]
+description = "Script to scrape realtime results html pages."
+license = "MIT"
+repository = "https://github.com/ChrisHarig/realtime_results_scraper"
+readme = "README.md"
+keywords = ["swimming", "scraper", "hytek", "results", "parser"]
 
 [lib]
 name = "realtime_results_scraper"
@@ -19,3 +25,4 @@ futures = "0.3"
 serde = { version = "1.0", features = ["derive"] }
 csv = "1.3"
 clap = { version = "4.5", features = ["derive"] }
+chrono = "0.4"

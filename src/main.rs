@@ -1,7 +1,7 @@
 use clap::{Parser, ValueEnum};
 use realtime_results_scraper::{
     parse, print_individual_results, print_relay_results,
-    write_individual_csv, write_relay_csv, write_metadata_csv, OutputOptions
+    write_results_to_folders, OutputOptions
 };
 use std::io::{self, BufRead};
 
@@ -15,20 +15,18 @@ enum OutputFormat {
 #[command(name = "realtime_results_scraper")]
 #[command(about = "Parse swimming meet results from URLs")]
 struct Args {
-    /// realtime-results meet or event URL to parse
+    /// Realtime-results meet or event URL to parse
     url: Option<String>,
 
-    /// output format, csv or stdout
+    /// Output format
     #[arg(short, long, value_enum, default_value = "csv")]
     output: OutputFormat,
 
-    /// disable metadata output (venue, meet name, records, race info)
-    #[arg(long)]
+    /// Disable metadata output
+    #[arg(long, default_value = "false")]
     no_metadata: bool,
 
-    /// maximum placement to include (e.g., 16 = top 16 places, ties included)
-    /// 0 will output only meet metadata
-    /// default to all participants
+    /// Number of swimmers to include per event [default: all]
     #[arg(short, long)]
     top: Option<u32>,
 }
@@ -52,7 +50,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("Parsing: {}\n", url);
 
     // Enter parse flow
-    let (individual_results, relay_results) = parse(url).await?;
+    let results = parse(url).await?;
 
     // Build options from args (None = all participants, Some(n) = top n placements)
     let options = OutputOptions {
@@ -62,29 +60,26 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     match args.output {
         OutputFormat::Csv => {
-            if !individual_results.is_empty() {
-                write_individual_csv(&individual_results, &options)?;
-            }
-            if !relay_results.is_empty() {
-                write_relay_csv(&relay_results, &options)?;
-            }
-            if options.metadata {
-                write_metadata_csv(&individual_results, &relay_results)?;
-            }
+            write_results_to_folders(
+                &results.individual_results,
+                &results.relay_results,
+                results.meet_title.as_deref(),
+                &options,
+            )?;
         }
         OutputFormat::Stdout => {
-            for event_results in &individual_results {
+            for event_results in &results.individual_results {
                 print_individual_results(event_results, &options);
             }
-            for relay_event in &relay_results {
+            for relay_event in &results.relay_results {
                 print_relay_results(relay_event, &options);
             }
         }
     }
 
-    let total = individual_results.len() + relay_results.len();
+    let total = results.individual_results.len() + results.relay_results.len();
     println!("\nParsed {} event(s) ({} individual, {} relay)",
-             total, individual_results.len(), relay_results.len());
+             total, results.individual_results.len(), results.relay_results.len());
 
     Ok(())
 }

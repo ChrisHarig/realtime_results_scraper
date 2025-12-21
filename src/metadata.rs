@@ -179,8 +179,29 @@ pub fn parse_event_metadata(html: &str) -> Option<EventMetadata> {
         }
     }
 
-    let venue = header_lines.first().cloned();
-    let meet_name = header_lines.get(1).cloned();
+    // Find meet name - it appears after the "Site License" line
+    let mut meet_name: Option<String> = None;
+    let mut venue: Option<String> = None;
+    let mut found_license = false;
+
+    for line in &header_lines {
+        if line.to_lowercase().contains("site license") || line.to_lowercase().contains("license hy-tek") {
+            found_license = true;
+            continue;
+        }
+        if found_license && meet_name.is_none() {
+            meet_name = Some(line.clone());
+        } else if meet_name.is_some() && venue.is_none() {
+            venue = Some(line.clone());
+            break;
+        }
+    }
+
+    // Fallback to old behavior if no license line found
+    if meet_name.is_none() {
+        meet_name = header_lines.first().cloned();
+        venue = header_lines.get(1).cloned();
+    }
 
     Some(EventMetadata {
         venue,

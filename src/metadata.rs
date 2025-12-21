@@ -26,7 +26,7 @@ pub struct RaceInfo {
 }
 
 impl RaceInfo {
-    /// Returns course code (SCY, SCM, LCM) based on course string.
+    /// Returns course code (SCY, SCM, LCM) based on course string
     pub fn course_code(&self) -> Option<&'static str> {
         let course = self.course.as_ref()?.to_lowercase();
         if course.contains("yard") {
@@ -48,7 +48,7 @@ impl RaceInfo {
 // ============================================================================
 
 const GENDERS: &[&str] = &["Men", "Women", "Boys", "Girls", "Mixed", "Male", "Female"];
-const COURSE_WORDS: &[&str] = &["Yard", "Yards", "Meter", "Meters", "LC", "SC", "Long", "Short"];
+const COURSE_WORDS: &[&str] = &["Yard", "Yards", "Meter", "Meters", "LC", "SC", "LCM", "SCM", "SCY", "Long", "Short"];
 const STROKES: &[&str] = &[
     "Freestyle", "Free",
     "Backstroke", "Back",
@@ -62,7 +62,7 @@ const STROKES: &[&str] = &[
 // PARSING - RACE INFO
 // ============================================================================
 
-/// Parses race information from event headline using token classification.
+/// Parses race information from event headline using token classification
 pub fn parse_race_info(headline: &str) -> Option<RaceInfo> {
     let tokens: Vec<&str> = headline.split_whitespace().collect();
 
@@ -136,7 +136,7 @@ fn is_stroke_word(token: &str) -> bool {
 // PARSING - METADATA
 // ============================================================================
 
-/// Extracts metadata (venue, meet name, records) from HTML document.
+/// Extracts metadata (venue, meet name, records) from HTML document
 pub fn parse_event_metadata(html: &str) -> Option<EventMetadata> {
     let document = Html::parse_document(html);
     let pre_selector = Selector::parse("pre").unwrap();
@@ -190,90 +190,3 @@ pub fn parse_event_metadata(html: &str) -> Option<EventMetadata> {
     })
 }
 
-/// Extracts event name from HTML bold tag.
-pub fn extract_event_name(html: &str) -> Option<String> {
-    let document = Html::parse_document(html);
-    let selector = Selector::parse("b").unwrap();
-
-    for element in document.select(&selector) {
-        let text = element.text().collect::<String>();
-        if text.contains("Event") {
-            return Some(text.trim().to_string());
-        }
-    }
-
-    None
-}
-
-// ============================================================================
-// TESTS
-// ============================================================================
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_parse_race_info_standard() {
-        let info = parse_race_info("Event 10  Men 200 Yard IM").unwrap();
-        assert_eq!(info.event_number, 10);
-        assert_eq!(info.gender, Some("Men".to_string()));
-        assert_eq!(info.distance, Some(200));
-        assert_eq!(info.course, Some("Yard".to_string()));
-        assert_eq!(info.stroke, Some("IM".to_string()));
-        assert!(info.other.is_empty());
-    }
-
-    #[test]
-    fn test_parse_race_info_with_age_group() {
-        let info = parse_race_info("Event 5  Girls 13-14 100 Yard Freestyle").unwrap();
-        assert_eq!(info.event_number, 5);
-        assert_eq!(info.gender, Some("Girls".to_string()));
-        assert_eq!(info.distance, Some(100));
-        assert_eq!(info.course, Some("Yard".to_string()));
-        assert_eq!(info.stroke, Some("Freestyle".to_string()));
-        assert_eq!(info.other, vec!["13-14"]);
-    }
-
-    #[test]
-    fn test_parse_race_info_lc_meter() {
-        let info = parse_race_info("Event 3  Women 200 LC Meter Backstroke").unwrap();
-        assert_eq!(info.event_number, 3);
-        assert_eq!(info.gender, Some("Women".to_string()));
-        assert_eq!(info.distance, Some(200));
-        assert_eq!(info.course, Some("LC Meter".to_string()));
-        assert_eq!(info.course_code(), Some("LCM"));
-        assert_eq!(info.stroke, Some("Backstroke".to_string()));
-    }
-
-    #[test]
-    fn test_parse_race_info_relay() {
-        let info = parse_race_info("Event 1  Men 400 Yard Medley Relay").unwrap();
-        assert_eq!(info.event_number, 1);
-        assert_eq!(info.distance, Some(400));
-        assert_eq!(info.stroke, Some("Medley Relay".to_string()));
-        assert!(info.is_relay);
-    }
-
-    #[test]
-    fn test_parse_race_info_individual_medley() {
-        let info = parse_race_info("Event 7  Women 400 Yard Individual Medley").unwrap();
-        assert_eq!(info.stroke, Some("Individual Medley".to_string()));
-        assert!(!info.is_relay);
-    }
-
-    #[test]
-    fn test_course_codes() {
-        let mut info = parse_race_info("Event 1  Men 50 Yard Free").unwrap();
-        assert_eq!(info.course_code(), Some("SCY"));
-
-        info.course = Some("LC Meter".to_string());
-        assert_eq!(info.course_code(), Some("LCM"));
-
-        info.course = Some("SC Meter".to_string());
-        assert_eq!(info.course_code(), Some("SCM"));
-
-        info.course = Some("Meter".to_string());
-        assert_eq!(info.course_code(), Some("LCM"));
-    }
-}

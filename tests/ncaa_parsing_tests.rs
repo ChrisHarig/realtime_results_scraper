@@ -1,7 +1,7 @@
 use realtime_results_scraper::{
     parse, process_event, parse_meet_index, print_results, print_relay_results,
     write_csv, write_relay_csv, detect_url_type,
-    UrlType, ParsedEvent
+    UrlType, ParsedEvent, OutputOptions
 };
 
 const NCAA_D1_MEN_2024_URL: &str = "https://swimmeetresults.tech/NCAA-Division-I-Men-2024";
@@ -34,7 +34,7 @@ async fn test_process_individual_event() {
 
     match result {
         Ok(ParsedEvent::Individual(event_results)) => {
-            print_results(&event_results);
+            print_results(&event_results, &OutputOptions::default());
             println!("\n✓ Successfully parsed event with {} swimmers", event_results.swimmers.len());
             assert!(!event_results.swimmers.is_empty(), "Should have parsed swimmers");
         }
@@ -58,7 +58,7 @@ async fn test_process_relay_event() {
 
     match result {
         Ok(ParsedEvent::Relay(relay_results)) => {
-            print_relay_results(&relay_results);
+            print_relay_results(&relay_results, &OutputOptions::default());
             println!("\n✓ Successfully parsed relay with {} teams", relay_results.teams.len());
             assert!(!relay_results.teams.is_empty(), "Should have parsed teams");
         }
@@ -98,7 +98,7 @@ async fn test_parse_event_url() {
 
     assert_eq!(individual.len(), 1, "Should return exactly one individual event");
     assert!(relay.is_empty(), "Should return no relay events");
-    print_results(&individual[0]);
+    print_results(&individual[0], &OutputOptions::default());
     println!("\n✓ parse correctly handled individual event URL");
 }
 
@@ -113,7 +113,7 @@ async fn test_parse_relay_url() {
 
     assert!(individual.is_empty(), "Should return no individual events");
     assert_eq!(relay.len(), 1, "Should return exactly one relay event");
-    print_relay_results(&relay[0]);
+    print_relay_results(&relay[0], &OutputOptions::default());
     println!("\n✓ parse correctly handled relay event URL");
 }
 
@@ -142,7 +142,8 @@ async fn test_write_csv() {
     let (individual, relay) = parse(EVENT_500_FREE_FINALS_URL).await
         .expect("Failed to parse event");
 
-    write_csv(&individual).expect("Failed to write CSV");
+    let options = OutputOptions::default();
+    write_csv(&individual, &options).expect("Failed to write CSV");
 
     // Verify file exists
     assert!(std::path::Path::new("results.csv").exists(), "CSV file should exist");
@@ -150,7 +151,7 @@ async fn test_write_csv() {
 
     // Clean up relay CSV test
     if !relay.is_empty() {
-        write_relay_csv(&relay).expect("Failed to write relay CSV");
+        write_relay_csv(&relay, &options).expect("Failed to write relay CSV");
         assert!(std::path::Path::new("relay_results.csv").exists(), "Relay CSV file should exist");
     }
 }

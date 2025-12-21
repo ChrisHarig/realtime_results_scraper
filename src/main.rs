@@ -1,6 +1,6 @@
 use clap::{Parser, ValueEnum};
 use realtime_results_scraper::{
-    parse, print_results_with_options, print_relay_results_with_options,
+    parse, print_results, print_relay_results,
     write_csv, write_relay_csv, OutputOptions
 };
 use std::io::{self, BufRead};
@@ -25,6 +25,11 @@ struct Args {
     /// Disable metadata output (venue, meet name, records, race info)
     #[arg(long)]
     no_metadata: bool,
+
+    /// Maximum placement to include (e.g., 16 = top 16 places, ties included)
+    /// Use 0 for only metadata. Omit for all participants (default)
+    #[arg(short, long)]
+    top: Option<u32>,
 }
 
 #[tokio::main]
@@ -48,23 +53,27 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Enter parse flow
     let (individual_results, relay_results) = parse(url).await?;
 
+    // Build options from args (None = all participants, Some(n) = top n placements)
+    let options = OutputOptions {
+        metadata: !args.no_metadata,
+        top_n: args.top,
+    };
+
     match args.output {
         OutputFormat::Csv => {
             if !individual_results.is_empty() {
-                write_csv(&individual_results)?;
+                write_csv(&individual_results, &options)?;
             }
             if !relay_results.is_empty() {
-                write_relay_csv(&relay_results)?;
+                write_relay_csv(&relay_results, &options)?;
             }
         }
         OutputFormat::Stdout => {
-            let options = OutputOptions { metadata: !args.no_metadata };
-
             for event_results in &individual_results {
-                print_results_with_options(event_results, &options);
+                print_results(event_results, &options);
             }
             for relay_event in &relay_results {
-                print_relay_results_with_options(relay_event, &options);
+                print_relay_results(relay_event, &options);
             }
         }
     }

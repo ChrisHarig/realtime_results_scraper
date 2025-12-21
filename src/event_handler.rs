@@ -44,7 +44,7 @@ pub struct EventResults {
 // INDIVIDUAL EVENT PARSING
 // ============================================================================
 
-/// Parses individual (non-relay) event HTML and extracts swimmer results.
+/// Parses individual (non-relay) event HTML and extracts swimmer results
 pub fn parse_individual_event_html(
     html: &str,
     event_name: &str,
@@ -102,7 +102,7 @@ pub fn parse_individual_event_html(
 // SWIMMER PARSING
 // ============================================================================
 
-/// Checks if a line starts a swimmer result (place number or -- for DQ).
+/// Checks if a line starts a swimmer result (place number or -- for DQ)
 fn is_swimmer_line(line: &str) -> bool {
     match line.split_whitespace().next() {
         Some(token) => {
@@ -114,7 +114,7 @@ fn is_swimmer_line(line: &str) -> bool {
     }
 }
 
-/// Parses a swimmer section (main line + split lines) into a Swimmer.
+/// Parses a swimmer section (main line + split lines) into a Swimmer
 fn parse_swimmer_section(lines: &[&str]) -> Option<Swimmer> {
     let main_line = lines[0].trim();
     let parts: Vec<&str> = main_line.split_whitespace().collect();
@@ -175,7 +175,7 @@ fn parse_swimmer_section(lines: &[&str]) -> Option<Swimmer> {
     })
 }
 
-/// Extracts reaction time and split times from swimmer lines.
+/// Extracts reaction time and split times from swimmer lines
 fn parse_splits(lines: &[&str]) -> (Option<String>, Vec<Split>) {
     let mut splits = Vec::new();
     let mut reaction_time: Option<String> = None;

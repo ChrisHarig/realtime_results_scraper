@@ -8,7 +8,7 @@ pub mod utils;
 use std::error::Error;
 use futures::future::join_all;
 
-use metadata::{parse_event_metadata, parse_race_info, extract_event_name};
+use metadata::{parse_event_metadata, parse_race_info};
 use utils::{fetch_html, extract_session_from_url};
 
 // ============================================================================
@@ -17,10 +17,7 @@ use utils::{fetch_html, extract_session_from_url};
 
 pub use meet_handler::{parse_meet_index, Meet, Event};
 pub use metadata::{EventMetadata, RaceInfo};
-pub use output::{
-    print_results, print_results_with_options, write_csv, OutputOptions,
-    write_relay_csv, print_relay_results, print_relay_results_with_options
-};
+pub use output::{print_results, write_csv, write_relay_csv, print_relay_results, OutputOptions};
 pub use event_handler::{parse_individual_event_html, EventResults, Swimmer, Split};
 pub use relay_handler::{parse_relay_event_html, RelayResults, RelayTeam, RelaySwimmer};
 
@@ -35,7 +32,7 @@ pub enum UrlType {
     Event,
 }
 
-/// Detects if a URL points to a meet index or individual event.
+/// Detects if a URL points to a meet index or individual event
 pub fn detect_url_type(url: &str) -> UrlType {
     if url.trim_end_matches('/').ends_with(".htm") {
         UrlType::Event
@@ -55,21 +52,20 @@ pub enum ParsedEvent {
     Relay(RelayResults),
 }
 
-/// Fetches and parses a single event URL, dispatching to individual or relay parser.
+/// Fetches and parses a single event URL, dispatching to individual or relay parser
 pub async fn process_event(url: &str, session: char) -> Result<ParsedEvent, Box<dyn Error>> {
     let html = fetch_html(url).await?;
-    let event_name = extract_event_name(&html)
-        .ok_or("Could not find event name in page")?;
-
-    let metadata = parse_event_metadata(&html);
+    let metadata = parse_event_metadata(&html)
+        .ok_or("Could not find event metadata in page")?;
+    let event_name = metadata.event_headline.clone();
     let race_info = parse_race_info(&event_name);
     let is_relay = race_info.as_ref().is_some_and(|info| info.is_relay);
 
     if is_relay {
-        let result = parse_relay_event_html(&html, &event_name, session, metadata, race_info)?;
+        let result = parse_relay_event_html(&html, &event_name, session, Some(metadata), race_info)?;
         Ok(ParsedEvent::Relay(result))
     } else {
-        let result = parse_individual_event_html(&html, &event_name, session, metadata, race_info)?;
+        let result = parse_individual_event_html(&html, &event_name, session, Some(metadata), race_info)?;
         Ok(ParsedEvent::Individual(result))
     }
 }
@@ -78,7 +74,7 @@ pub async fn process_event(url: &str, session: char) -> Result<ParsedEvent, Box<
 // MEET PROCESSING
 // ============================================================================
 
-/// Fetches and parses all events in a meet, returning individual and relay results.
+/// Fetches and parses all events in a meet, returning individual and relay results
 pub async fn process_meet(url: &str) -> Result<(Vec<EventResults>, Vec<RelayResults>), Box<dyn Error>> {
     let meet = parse_meet_index(url).await?;
 
@@ -119,7 +115,7 @@ pub async fn process_meet(url: &str) -> Result<(Vec<EventResults>, Vec<RelayResu
 // MAIN ENTRY POINT
 // ============================================================================
 
-/// Parses a meet or event URL, returning individual and relay results.
+/// Parses a meet or event URL, returning individual and relay results
 pub async fn parse(url: &str) -> Result<(Vec<EventResults>, Vec<RelayResults>), Box<dyn Error>> {
     match detect_url_type(url) {
         UrlType::Meet => process_meet(url).await,

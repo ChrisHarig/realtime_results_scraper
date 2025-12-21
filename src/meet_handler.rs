@@ -31,7 +31,7 @@ struct EventLink {
 }
 
 impl Meet {
-    /// Creates a new Meet with the given base URL.
+    /// Creates a new Meet with the given base URL
     pub fn new(base_url: String) -> Meet {
         Meet {
             events: HashMap::new(),
@@ -39,19 +39,19 @@ impl Meet {
         }
     }
 
-    /// Adds an event to the meet.
+    /// Adds an event to the meet
     pub fn add_event(&mut self, name: String, event: Event) {
         self.events.insert(name, event);
     }
 
-    /// Returns a mutable reference to an event by name.
+    /// Returns a mutable reference to an event by name
     pub fn get_event_mut(&mut self, name: &str) -> Option<&mut Event> {
         self.events.get_mut(name)
     }
 }
 
 impl Event {
-    /// Creates a new Event with name and number.
+    /// Creates a new Event with name and number
     pub fn new(name: String, number: u32) -> Event {
         Event {
             name,
@@ -61,7 +61,7 @@ impl Event {
         }
     }
 
-    /// Sets the prelims or finals link based on session.
+    /// Sets the prelims or finals link based on session
     pub fn set_link(&mut self, link: String, session: char) {
         match session {
             'P' => self.prelims_link = Some(link),
@@ -72,7 +72,7 @@ impl Event {
 }
 
 impl EventLink {
-    /// Extracts event info from an index page link element.
+    /// Extracts event info from an index page link element
     fn from_element(link: ElementRef) -> Option<Self> {
         let href = link.value().attr("href")?.to_string();
         let text = link.text().next()?.to_string();
@@ -108,7 +108,7 @@ impl EventLink {
 // MEET INDEX PARSING
 // ============================================================================
 
-/// Fetches and parses a meet index page, returning a Meet with all event links.
+/// Fetches and parses a meet index page, returning a Meet with all event links
 pub async fn parse_meet_index(url: &str) -> Result<Meet, Box<dyn Error>> {
     let url = url.trim_end_matches('/');
     let mut meet = Meet::new(url.to_string());

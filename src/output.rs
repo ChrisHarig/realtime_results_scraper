@@ -10,8 +10,8 @@ const RELAY_CSV_OUTPUT_FILE: &str = "relay_results.csv";
 // INDIVIDUAL CSV OUTPUT
 // ============================================================================
 
-/// Writes individual event results to results.csv.
-pub fn write_csv(results: &[EventResults]) -> Result<(), Box<dyn Error>> {
+/// Writes individual event results to results.csv
+pub fn write_csv(results: &[EventResults], options: &OutputOptions) -> Result<(), Box<dyn Error>> {
     let max_splits = results.iter()
         .flat_map(|e| e.swimmers.iter())
         .map(|s| s.splits.len())
@@ -48,6 +48,15 @@ pub fn write_csv(results: &[EventResults]) -> Result<(), Box<dyn Error>> {
         };
 
         for swimmer in &event.swimmers {
+            // Filter by placement if top_n is set
+            if let Some(top_n) = options.top_n {
+                if let Some(place) = swimmer.place {
+                    if u32::from(place) > top_n {
+                        continue;
+                    }
+                }
+            }
+
             let place_str = match swimmer.place {
                 Some(p) => p.to_string(),
                 None => String::new(),
@@ -90,25 +99,25 @@ pub fn write_csv(results: &[EventResults]) -> Result<(), Box<dyn Error>> {
 // OUTPUT FORMATTING
 // ============================================================================
 
-/// Configuration for stdout display
+/// Configuration for output display and filtering
 #[derive(Debug, Clone)]
 pub struct OutputOptions {
     pub metadata: bool,
+    /// Maximum placement to include (None = all placements)
+    pub top_n: Option<u32>,
 }
 
 impl Default for OutputOptions {
     fn default() -> Self {
-        OutputOptions { metadata: true }
+        OutputOptions {
+            metadata: true,
+            top_n: None,
+        }
     }
 }
 
-/// Prints individual results with default options.
-pub fn print_results(results: &EventResults) {
-    print_results_with_options(results, &OutputOptions::default());
-}
-
-/// Prints individual results with custom options.
-pub fn print_results_with_options(results: &EventResults, options: &OutputOptions) {
+/// Prints individual results to stdout
+pub fn print_results(results: &EventResults, options: &OutputOptions) {
     let session_str = if results.session == 'P' { "Prelims" } else { "Finals" };
 
     if options.metadata {
@@ -142,6 +151,15 @@ pub fn print_results_with_options(results: &EventResults, options: &OutputOption
     println!("{:-<80}", "");
 
     for swimmer in &results.swimmers {
+        // Filter by placement if top_n is set
+        if let Some(top_n) = options.top_n {
+            if let Some(place) = swimmer.place {
+                if u32::from(place) > top_n {
+                    continue;
+                }
+            }
+        }
+
         let place_str = match swimmer.place {
             Some(p) => format!("{:2}", p),
             None => "--".to_string(),
@@ -169,8 +187,8 @@ pub fn print_results_with_options(results: &EventResults, options: &OutputOption
 // RELAY CSV OUTPUT
 // ============================================================================
 
-/// Writes relay results to relay_results.csv.
-pub fn write_relay_csv(results: &[RelayResults]) -> Result<(), Box<dyn Error>> {
+/// Writes relay results to relay_results.csv
+pub fn write_relay_csv(results: &[RelayResults], options: &OutputOptions) -> Result<(), Box<dyn Error>> {
     if results.is_empty() {
         return Ok(());
     }
@@ -214,6 +232,15 @@ pub fn write_relay_csv(results: &[RelayResults]) -> Result<(), Box<dyn Error>> {
         };
 
         for team in &event.teams {
+            // Filter by placement if top_n is set
+            if let Some(top_n) = options.top_n {
+                if let Some(place) = team.place {
+                    if u32::from(place) > top_n {
+                        continue;
+                    }
+                }
+            }
+
             let place_str = match team.place {
                 Some(p) => p.to_string(),
                 None => String::new(),
@@ -272,13 +299,8 @@ pub fn write_relay_csv(results: &[RelayResults]) -> Result<(), Box<dyn Error>> {
 // RELAY OUTPUT FORMATTING
 // ============================================================================
 
-/// Prints relay results with default options.
-pub fn print_relay_results(results: &RelayResults) {
-    print_relay_results_with_options(results, &OutputOptions::default());
-}
-
-/// Prints relay results with custom options.
-pub fn print_relay_results_with_options(results: &RelayResults, options: &OutputOptions) {
+/// Prints relay results to stdout
+pub fn print_relay_results(results: &RelayResults, options: &OutputOptions) {
     let session_str = if results.session == 'P' { "Prelims" } else { "Finals" };
 
     if options.metadata {
@@ -311,6 +333,15 @@ pub fn print_relay_results_with_options(results: &RelayResults, options: &Output
     println!("{:-<80}", "");
 
     for team in &results.teams {
+        // Filter by placement if top_n is set
+        if let Some(top_n) = options.top_n {
+            if let Some(place) = team.place {
+                if u32::from(place) > top_n {
+                    continue;
+                }
+            }
+        }
+
         let place_str = match team.place {
             Some(p) => format!("{:2}", p),
             None => "--".to_string(),

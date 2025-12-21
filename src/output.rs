@@ -5,13 +5,81 @@ use std::fs::File;
 
 const CSV_OUTPUT_FILE: &str = "results.csv";
 const RELAY_CSV_OUTPUT_FILE: &str = "relay_results.csv";
+const METADATA_CSV_OUTPUT_FILE: &str = "metadata.csv";
+
+// ============================================================================
+// METADATA CSV OUTPUT
+// ============================================================================
+
+/// Writes event metadata to metadata.csv
+pub fn write_metadata_csv(
+    individual_results: &[EventResults],
+    relay_results: &[RelayResults],
+) -> Result<(), Box<dyn Error>> {
+    let file = File::create(METADATA_CSV_OUTPUT_FILE)?;
+    let mut writer = csv::Writer::from_writer(file);
+
+    writer.write_record(["event_name", "session", "venue", "meet_name", "records"])?;
+
+    for event in individual_results {
+        let session = if event.session == 'P' { "Prelims" } else { "Finals" };
+        let (venue, meet_name, records) = if let Some(ref meta) = event.metadata {
+            (
+                meta.venue.clone().unwrap_or_default(),
+                meta.meet_name.clone().unwrap_or_default(),
+                meta.records.iter()
+                    .map(|r| r.trim_matches('=').trim())
+                    .collect::<Vec<_>>()
+                    .join(" | "),
+            )
+        } else {
+            (String::new(), String::new(), String::new())
+        };
+
+        writer.write_record([
+            &event.event_name,
+            session,
+            &venue,
+            &meet_name,
+            &records,
+        ])?;
+    }
+
+    for event in relay_results {
+        let session = if event.session == 'P' { "Prelims" } else { "Finals" };
+        let (venue, meet_name, records) = if let Some(ref meta) = event.metadata {
+            (
+                meta.venue.clone().unwrap_or_default(),
+                meta.meet_name.clone().unwrap_or_default(),
+                meta.records.iter()
+                    .map(|r| r.trim_matches('=').trim())
+                    .collect::<Vec<_>>()
+                    .join(" | "),
+            )
+        } else {
+            (String::new(), String::new(), String::new())
+        };
+
+        writer.write_record([
+            &event.event_name,
+            session,
+            &venue,
+            &meet_name,
+            &records,
+        ])?;
+    }
+
+    writer.flush()?;
+    println!("Metadata written to {}", METADATA_CSV_OUTPUT_FILE);
+    Ok(())
+}
 
 // ============================================================================
 // INDIVIDUAL CSV OUTPUT
 // ============================================================================
 
 /// Writes individual event results to results.csv
-pub fn write_csv(results: &[EventResults], options: &OutputOptions) -> Result<(), Box<dyn Error>> {
+pub fn write_individual_csv(results: &[EventResults], options: &OutputOptions) -> Result<(), Box<dyn Error>> {
     let max_splits = results.iter()
         .flat_map(|e| e.swimmers.iter())
         .map(|s| s.splits.len())
@@ -117,7 +185,7 @@ impl Default for OutputOptions {
 }
 
 /// Prints individual results to stdout
-pub fn print_results(results: &EventResults, options: &OutputOptions) {
+pub fn print_individual_results(results: &EventResults, options: &OutputOptions) {
     let session_str = if results.session == 'P' { "Prelims" } else { "Finals" };
 
     if options.metadata {

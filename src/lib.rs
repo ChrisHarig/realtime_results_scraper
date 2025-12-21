@@ -17,7 +17,7 @@ use utils::{fetch_html, extract_session_from_url};
 
 pub use meet_handler::{parse_meet_index, Meet, Event};
 pub use metadata::{EventMetadata, RaceInfo};
-pub use output::{print_results, write_csv, write_relay_csv, print_relay_results, OutputOptions};
+pub use output::{print_individual_results, write_individual_csv, write_relay_csv, print_relay_results, write_metadata_csv, OutputOptions};
 pub use event_handler::{parse_individual_event_html, EventResults, Swimmer, Split};
 pub use relay_handler::{parse_relay_event_html, RelayResults, RelayTeam, RelaySwimmer};
 

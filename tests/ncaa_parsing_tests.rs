@@ -1,6 +1,6 @@
 use realtime_results_scraper::{
-    parse, process_event, parse_meet_index, print_results, print_relay_results,
-    write_csv, write_relay_csv, detect_url_type,
+    parse, process_event, parse_meet_index, print_individual_results, print_relay_results,
+    write_individual_csv, write_relay_csv, detect_url_type,
     UrlType, ParsedEvent, OutputOptions
 };
 
@@ -34,7 +34,7 @@ async fn test_process_individual_event() {
 
     match result {
         Ok(ParsedEvent::Individual(event_results)) => {
-            print_results(&event_results, &OutputOptions::default());
+            print_individual_results(&event_results, &OutputOptions::default());
             println!("\n✓ Successfully parsed event with {} swimmers", event_results.swimmers.len());
             assert!(!event_results.swimmers.is_empty(), "Should have parsed swimmers");
         }
@@ -98,7 +98,7 @@ async fn test_parse_event_url() {
 
     assert_eq!(individual.len(), 1, "Should return exactly one individual event");
     assert!(relay.is_empty(), "Should return no relay events");
-    print_results(&individual[0], &OutputOptions::default());
+    print_individual_results(&individual[0], &OutputOptions::default());
     println!("\n✓ parse correctly handled individual event URL");
 }
 
@@ -143,7 +143,7 @@ async fn test_write_csv() {
         .expect("Failed to parse event");
 
     let options = OutputOptions::default();
-    write_csv(&individual, &options).expect("Failed to write CSV");
+    write_individual_csv(&individual, &options).expect("Failed to write CSV");
 
     // Verify file exists
     assert!(std::path::Path::new("results.csv").exists(), "CSV file should exist");

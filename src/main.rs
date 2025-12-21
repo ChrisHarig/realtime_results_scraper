@@ -1,7 +1,7 @@
 use clap::{Parser, ValueEnum};
 use realtime_results_scraper::{
-    parse, print_results, print_relay_results,
-    write_csv, write_relay_csv, OutputOptions
+    parse, print_individual_results, print_relay_results,
+    write_individual_csv, write_relay_csv, write_metadata_csv, OutputOptions
 };
 use std::io::{self, BufRead};
 
@@ -15,19 +15,20 @@ enum OutputFormat {
 #[command(name = "realtime_results_scraper")]
 #[command(about = "Parse swimming meet results from URLs")]
 struct Args {
-    /// Meet or event URL to parse
+    /// realtime-results meet or event URL to parse
     url: Option<String>,
 
-    /// Output format
+    /// output format, csv or stdout
     #[arg(short, long, value_enum, default_value = "csv")]
     output: OutputFormat,
 
-    /// Disable metadata output (venue, meet name, records, race info)
+    /// disable metadata output (venue, meet name, records, race info)
     #[arg(long)]
     no_metadata: bool,
 
-    /// Maximum placement to include (e.g., 16 = top 16 places, ties included)
-    /// Use 0 for only metadata. Omit for all participants (default)
+    /// maximum placement to include (e.g., 16 = top 16 places, ties included)
+    /// 0 will output only meet metadata
+    /// default to all participants
     #[arg(short, long)]
     top: Option<u32>,
 }
@@ -62,15 +63,18 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     match args.output {
         OutputFormat::Csv => {
             if !individual_results.is_empty() {
-                write_csv(&individual_results, &options)?;
+                write_individual_csv(&individual_results, &options)?;
             }
             if !relay_results.is_empty() {
                 write_relay_csv(&relay_results, &options)?;
             }
+            if options.metadata {
+                write_metadata_csv(&individual_results, &relay_results)?;
+            }
         }
         OutputFormat::Stdout => {
             for event_results in &individual_results {
-                print_results(event_results, &options);
+                print_individual_results(event_results, &options);
             }
             for relay_event in &relay_results {
                 print_relay_results(relay_event, &options);

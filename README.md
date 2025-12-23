@@ -19,25 +19,25 @@ curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 
 ## Install
 
+From crates.io:
+```bash
+cargo install realtime_results_scraper
+```
+
+Or build from source:
 ```bash
 git clone https://github.com/ChrisHarig/realtime_results_scraper
 cd realtime_results_scraper
-
-# Option 1: Build and run directly
-cargo run -- <URL>
-
-# Option 2: Build release binary
 cargo build --release
-./target/release/realtime_results_scraper <URL>
 ```
 
 ## Usage
 
 To scrape a meet just copy the URL and paste in the command line. 
 
-To grab a specific event's URL, go to the index on the left side of a meet page, ctrl+click and select "copy link address', then paste in to the command line  
+To grab a specific event's URL, go to the index on the left side of a meet page, ctrl+click and select "copy link address', then paste in to the command line.  
 
-There are three different optional flags detailed below.
+There are three optional flags detailed below.
 
 ```bash
 # Parse entire meet
@@ -61,9 +61,7 @@ realtime_results_scraper --help
 
 ## Output
 
-The default ouput format is csv, but this can be changes to stdout. 
-
-The csv output structure is as follows: 
+The default ouput format is csv, but this can be changed to stdout. 
 
 **Meet URL** creates:
 ```

@@ -1,7 +1,7 @@
 # Realtime Results Scraper
 
 A Rust CLI tool to parse swimming meet results from HY-TEK Realtime Results pages. 
-ex: (https://swimmeetresults.tech/NCAA-Division-I-Men-2025/)
+(Ex: https://swimmeetresults.tech/NCAA-Division-I-Men-2025/)
 
 Pass a meet URL to scrape all events, or a specific event URL. 
 

@@ -1,14 +1,13 @@
 # Realtime Results Scraper
 
-A Rust CLI tool to parse swimming meet results from [swimmeetresults.tech](https://swimmeetresults.tech/).
+A Rust CLI tool to parse swimming meet results from HY-TEK Realtime Results pages. 
+ex: (https://swimmeetresults.tech/NCAA-Division-I-Men-2025/)
 
 Pass a meet URL to scrape all events, or a specific event URL. 
 
-To grab a specific event's URL, go to the index on the left side of the page, ctrl click and open the link in a new page. Then copy the url.  
-
 **Expected format:** Standard HyTek meet results pages where the index displays all events, and each link is a `.htm` file containing one event's results.
 
-Note: Some pages that contain formatting like US masters results, where each link contains results from multiple events, will not work with this package.
+Some pages that contain formatting like US masters results, where each link contains results from multiple events, will not work with this package.
 
 ## Prerequisites
 
@@ -84,9 +83,3 @@ MeetName_datetime_random/
 ```
 
 Each folder/file includes a unique timestamp and random suffix to prevent overwrites. 
-
-## Building
-
-```bash
-cargo build --release
-```

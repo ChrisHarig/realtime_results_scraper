@@ -14,6 +14,7 @@ enum OutputFormat {
 #[derive(Parser, Debug)]
 #[command(name = "realtime_results_scraper")]
 #[command(about = "Parse swimming meet results from URLs")]
+#[command(next_line_help = true)]
 struct Args {
     /// Realtime-results meet or event URL to parse
     url: Option<String>,

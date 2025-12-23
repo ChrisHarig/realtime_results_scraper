@@ -132,6 +132,11 @@ fn is_stroke_word(token: &str) -> bool {
     STROKES.iter().any(|&s| s.eq_ignore_ascii_case(token))
 }
 
+/// Checks if a line is a delimiter line (e.g., "=================")
+fn is_delimiter_line(line: &str) -> bool {
+    line.chars().all(|c| c == '=') && line.len() >= 5
+}
+
 // ============================================================================
 // PARSING - METADATA
 // ============================================================================
@@ -149,6 +154,8 @@ pub fn parse_event_metadata(html: &str) -> Option<EventMetadata> {
     let mut event_headline = String::new();
     let mut records: Vec<String> = Vec::new();
     let mut found_event = false;
+
+    let mut in_records_section = false;
 
     for line in &lines {
         let trimmed = line.trim();
@@ -169,12 +176,20 @@ pub fn parse_event_metadata(html: &str) -> Option<EventMetadata> {
         }
 
         if found_event {
-            if trimmed.contains(':') && trimmed.chars().filter(|c| c.is_ascii_digit()).count() >= 4 {
-                records.push(trimmed.to_string());
+            // Records are between two "=====" delimiter lines
+            if is_delimiter_line(trimmed) {
+                if in_records_section {
+                    // Second delimiter - end of records section
+                    break;
+                } else {
+                    // First delimiter - start of records section
+                    in_records_section = true;
+                    continue;
+                }
             }
 
-            if trimmed.chars().next().is_some_and(|c| c.is_ascii_digit()) && !trimmed.contains(':') {
-                break;
+            if in_records_section {
+                records.push(trimmed.to_string());
             }
         }
     }

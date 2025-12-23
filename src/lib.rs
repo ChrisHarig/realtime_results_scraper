@@ -68,8 +68,10 @@ pub enum ParsedEvent {
 /// Fetches and parses a single event URL, dispatching to individual or relay parser
 pub async fn process_event(url: &str, session: char) -> Result<ParsedEvent, Box<dyn Error>> {
     let html = fetch_html(url).await?;
-    let metadata = parse_event_metadata(&html)
-        .ok_or("Could not find event metadata in page")?;
+    let metadata = parse_event_metadata(&html).ok_or_else(|| {
+        eprintln!("Error: Could not parse event metadata from page");
+        "Could not find event metadata in page"
+    })?;
     let event_name = metadata.event_headline.clone();
     let race_info = parse_race_info(&event_name);
     let is_relay = race_info.as_ref().is_some_and(|info| info.is_relay);
@@ -138,8 +140,10 @@ pub async fn parse(url: &str) -> Result<ParsedResults, Box<dyn Error>> {
     match detect_url_type(url) {
         UrlType::Meet => process_meet(url).await,
         UrlType::Event => {
-            let session = extract_session_from_url(url)
-                .ok_or("Could not determine session (P/F) from URL")?;
+            let session = extract_session_from_url(url).ok_or_else(|| {
+                eprintln!("Error: Could not determine session (P/F) from URL: {}", url);
+                "Could not determine session (P/F) from URL"
+            })?;
             match process_event(url, session).await? {
                 ParsedEvent::Individual(result) => {
                     let meet_title = result.metadata.as_ref()

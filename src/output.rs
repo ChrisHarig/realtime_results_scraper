@@ -119,12 +119,12 @@ pub fn write_individual_csv(results: &[EventResults], options: &OutputOptions) -
         };
 
         for swimmer in &event.swimmers {
-            // Filter by placement if top_n is set
+            // Filter by placement if top_n is set (skip DQ/no-place swimmers)
             if let Some(top_n) = options.top_n {
-                if let Some(place) = swimmer.place {
-                    if u32::from(place) > top_n {
-                        continue;
-                    }
+                match swimmer.place {
+                    Some(place) if u32::from(place) > top_n => continue,
+                    None => continue,
+                    _ => {}
                 }
             }
 
@@ -222,12 +222,12 @@ pub fn print_individual_results(results: &EventResults, options: &OutputOptions)
     println!("{:-<80}", "");
 
     for swimmer in &results.swimmers {
-        // Filter by placement if top_n is set
+        // Filter by placement if top_n is set (skip DQ/no-place swimmers)
         if let Some(top_n) = options.top_n {
-            if let Some(place) = swimmer.place {
-                if u32::from(place) > top_n {
-                    continue;
-                }
+            match swimmer.place {
+                Some(place) if u32::from(place) > top_n => continue,
+                None => continue,
+                _ => {}
             }
         }
 
@@ -303,12 +303,12 @@ pub fn write_relay_csv(results: &[RelayResults], options: &OutputOptions) -> Res
         };
 
         for team in &event.teams {
-            // Filter by placement if top_n is set
+            // Filter by placement if top_n is set (skip DQ/no-place teams)
             if let Some(top_n) = options.top_n {
-                if let Some(place) = team.place {
-                    if u32::from(place) > top_n {
-                        continue;
-                    }
+                match team.place {
+                    Some(place) if u32::from(place) > top_n => continue,
+                    None => continue,
+                    _ => {}
                 }
             }
 
@@ -404,12 +404,12 @@ pub fn print_relay_results(results: &RelayResults, options: &OutputOptions) {
     println!("{:-<80}", "");
 
     for team in &results.teams {
-        // Filter by placement if top_n is set
+        // Filter by placement if top_n is set (skip DQ/no-place teams)
         if let Some(top_n) = options.top_n {
-            if let Some(place) = team.place {
-                if u32::from(place) > top_n {
-                    continue;
-                }
+            match team.place {
+                Some(place) if u32::from(place) > top_n => continue,
+                None => continue,
+                _ => {}
             }
         }
 
@@ -571,11 +571,12 @@ fn write_individual_csv_to_file(
         };
 
         for swimmer in &event.swimmers {
+            // Filter by placement if top_n is set (skip DQ/no-place swimmers)
             if let Some(top_n) = options.top_n {
-                if let Some(place) = swimmer.place {
-                    if u32::from(place) > top_n {
-                        continue;
-                    }
+                match swimmer.place {
+                    Some(place) if u32::from(place) > top_n => continue,
+                    None => continue,
+                    _ => {}
                 }
             }
 
@@ -665,11 +666,12 @@ fn write_relay_csv_to_file(
         };
 
         for team in &event.teams {
+            // Filter by placement if top_n is set (skip DQ/no-place teams)
             if let Some(top_n) = options.top_n {
-                if let Some(place) = team.place {
-                    if u32::from(place) > top_n {
-                        continue;
-                    }
+                match team.place {
+                    Some(place) if u32::from(place) > top_n => continue,
+                    None => continue,
+                    _ => {}
                 }
             }
 

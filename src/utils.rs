@@ -18,7 +18,10 @@ pub fn sanitize_name(name: &str) -> String {
 
 /// Fetches HTML content from a URL
 pub async fn fetch_html(url: &str) -> Result<String, Box<dyn Error>> {
-    let response = reqwest::get(url).await?;
+    let response = reqwest::get(url).await.map_err(|e| {
+        eprintln!("Error: Failed to fetch URL: {}", url);
+        e
+    })?;
     Ok(response.text().await?)
 }
 
